@@ -23,7 +23,7 @@ import types from '@appbaseio/reactivecore/lib/utils/types';
 import getSuggestions from '@appbaseio/reactivecore/lib/utils/suggestions';
 import causes from '@appbaseio/reactivecore/lib/utils/causes';
 import Title from '../../styles/Title';
-import Input, { suggestionsContainer, suggestions } from '../../styles/Input';
+import Input, { suggestionsContainer, suggestions, noSuggestions } from '../../styles/Input';
 import CancelSvg from '../shared/CancelSvg';
 import SearchSvg from '../shared/SearchSvg';
 import InputIcon from '../../styles/InputIcon';
@@ -72,9 +72,8 @@ class CategorySearch extends Component {
 
 		const aggsQuery = this.getAggsQuery(this.props.categoryField);
 		this.props.setQueryOptions(this.internalComponent, aggsQuery, false);
-
 		if (this.props.selectedValue) {
-			this.setValue(this.props.selectedValue, true);
+			this.setValue(this.props.selectedValue, true, this.props, this.props.selectedCategory);
 		} else if (this.props.defaultSelected) {
 			this.setValue(this.props.defaultSelected, true);
 		}
@@ -107,7 +106,7 @@ class CategorySearch extends Component {
 		checkSomePropChange(
 			this.props,
 			nextProps,
-			['fieldWeights', 'fuzziness', 'queryFormat', 'dataField', 'categoryField'],
+			['fieldWeights', 'fuzziness', 'queryFormat', 'dataField', 'categoryField', 'nestedField'],
 			() => {
 				this.updateQuery(nextProps.componentId, this.state.currentValue, nextProps);
 			},
@@ -216,16 +215,27 @@ class CategorySearch extends Component {
 			};
 		}
 
+		if (finalQuery && props.nestedField) {
+			finalQuery = {
+				nested: {
+					path: props.nestedField,
+					query: finalQuery,
+				},
+			};
+		}
+
 		return finalQuery;
 	};
 
 	static shouldQuery = (value, dataFields, props) => {
-		const fields = dataFields.map((field, index) =>
-			`${field}${
-				Array.isArray(props.fieldWeights) && props.fieldWeights[index]
-					? `^${props.fieldWeights[index]}`
-					: ''
-			}`);
+		const fields = dataFields.map(
+			(field, index) =>
+				`${field}${
+					Array.isArray(props.fieldWeights) && props.fieldWeights[index]
+						? `^${props.fieldWeights[index]}`
+						: ''
+				}`,
+		);
 
 		if (props.queryFormat === 'and') {
 			return [
@@ -350,6 +360,7 @@ class CategorySearch extends Component {
 				},
 			} // prettier-ignore
 			: query(value, props, category);
+
 		props.updateQuery({
 			componentId,
 			query: queryObject,
@@ -358,6 +369,7 @@ class CategorySearch extends Component {
 			showFilter,
 			URLParams,
 			componentType: 'CATEGORYSEARCH',
+			category,
 		});
 	};
 
@@ -436,6 +448,13 @@ class CategorySearch extends Component {
 		return highlightedIndex === index ? '#eee' : '#fff';
 	};
 
+	handleSearchIconClick = () => {
+		const { currentValue } = this.state;
+		if (currentValue.trim()) {
+			this.setValue(currentValue, true);
+		}
+	};
+
 	renderIcon = () => {
 		if (this.props.showIcon) {
 			return this.props.icon || <SearchSvg />;
@@ -452,8 +471,7 @@ class CategorySearch extends Component {
 
 	renderIcons = () => (
 		<div>
-			{this.state.currentValue
-				&& this.props.showClear && (
+			{this.state.currentValue && this.props.showClear && (
 				<InputIcon
 					onClick={this.clearValue}
 					iconPosition="right"
@@ -462,9 +480,34 @@ class CategorySearch extends Component {
 					{this.renderCancelIcon()}
 				</InputIcon>
 			)}
-			<InputIcon iconPosition={this.props.iconPosition}>{this.renderIcon()}</InputIcon>
+			<InputIcon
+				onClick={this.handleSearchIconClick}
+				iconPosition={this.props.iconPosition}
+			>
+				{this.renderIcon()}
+			</InputIcon>
 		</div>
 	);
+
+	renderLoader = () => {
+		const {
+			loader, isLoading, themePreset, theme,
+		} = this.props;
+		const { currentValue } = this.state;
+		if (isLoading && loader && currentValue) {
+			return (
+				<div
+					className={`${noSuggestions(themePreset, theme)} ${getClassName(
+						this.props.innerClass,
+						'no-suggestion',
+					)}`}
+				>
+					<li>{loader}</li>
+				</div>
+			);
+		}
+		return null;
+	};
 
 	render() {
 		let suggestionsList = [];
@@ -477,8 +520,7 @@ class CategorySearch extends Component {
 		} = this.props;
 
 		// filter out empty categories
-		const filteredCategories = categories
-			.filter(category => Boolean(category.key));
+		const filteredCategories = categories.filter(category => Boolean(category.key));
 
 		if (
 			!this.state.currentValue
@@ -562,6 +604,7 @@ class CategorySearch extends Component {
 									themePreset={themePreset}
 								/>
 								{this.renderIcons()}
+								{this.renderLoader()}
 								{renderSuggestions
 									&& renderSuggestions({
 										currentValue: this.state.currentValue,
@@ -636,6 +679,7 @@ CategorySearch.propTypes = {
 	options: types.options,
 	categories: types.data,
 	selectedValue: types.selectedValue,
+	selectedCategory: types.selectedValue,
 	suggestions: types.suggestions,
 	// component props
 	autoFocus: types.bool,
@@ -657,10 +701,13 @@ CategorySearch.propTypes = {
 	fuzziness: types.fuzziness,
 	highlight: types.bool,
 	highlightField: types.stringOrArray,
+	nestedField: types.string,
 	icon: types.children,
 	iconPosition: types.iconPosition,
 	innerClass: types.style,
 	innerRef: types.func,
+	isLoading: types.bool,
+	loader: types.title,
 	onBlur: types.func,
 	onFocus: types.func,
 	onKeyDown: types.func,
@@ -711,8 +758,13 @@ const mapStateToProps = (state, props) => ({
 		(state.selectedValues[props.componentId]
 			&& state.selectedValues[props.componentId].value)
 		|| null,
+	selectedCategory:
+		(state.selectedValues[props.componentId]
+			&& state.selectedValues[props.componentId].category)
+		|| null,
 	suggestions: (state.hits[props.componentId] && state.hits[props.componentId].hits) || [],
 	themePreset: state.config.themePreset,
+	isLoading: state.isLoading[props.componentId],
 });
 
 const mapDispatchtoProps = dispatch => ({

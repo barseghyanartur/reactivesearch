@@ -23,7 +23,7 @@ import types from '@appbaseio/reactivecore/lib/utils/types';
 import getSuggestions from '@appbaseio/reactivecore/lib/utils/suggestions';
 import causes from '@appbaseio/reactivecore/lib/utils/causes';
 import Title from '../../styles/Title';
-import Input, { suggestionsContainer, suggestions } from '../../styles/Input';
+import Input, { suggestionsContainer, suggestions, noSuggestions } from '../../styles/Input';
 import SearchSvg from '../shared/SearchSvg';
 import CancelSvg from '../shared/CancelSvg';
 import InputIcon from '../../styles/InputIcon';
@@ -93,7 +93,7 @@ class DataSearch extends Component {
 		checkSomePropChange(
 			this.props,
 			nextProps,
-			['fieldWeights', 'fuzziness', 'queryFormat', 'dataField'],
+			['fieldWeights', 'fuzziness', 'queryFormat', 'dataField', 'nestedField'],
 			() => {
 				this.updateQuery(nextProps.componentId, this.state.currentValue, nextProps);
 			},
@@ -178,6 +178,15 @@ class DataSearch extends Component {
 		if (value === '') {
 			finalQuery = {
 				match_all: {},
+			};
+		}
+
+		if (finalQuery && props.nestedField) {
+			finalQuery = {
+				nested: {
+					path: props.nestedField,
+					query: finalQuery,
+				},
 			};
 		}
 
@@ -393,6 +402,13 @@ class DataSearch extends Component {
 		return highlightedIndex === index ? '#eee' : '#fff';
 	};
 
+	handleSearchIconClick = () => {
+		const { currentValue } = this.state;
+		if (currentValue.trim()) {
+			this.setValue(currentValue, true);
+		}
+	};
+
 	renderIcon = () => {
 		if (this.props.showIcon) {
 			return this.props.icon || <SearchSvg />;
@@ -419,9 +435,33 @@ class DataSearch extends Component {
 					{this.renderCancelIcon()}
 				</InputIcon>
 			)}
-			<InputIcon iconPosition={this.props.iconPosition}>{this.renderIcon()}</InputIcon>
+			<InputIcon
+				onClick={this.handleSearchIconClick}
+				iconPosition={this.props.iconPosition}
+			>
+				{this.renderIcon()}
+			</InputIcon>
 		</div>
 	);
+
+	renderLoader = () => {
+		const {
+			loader, isLoading, themePreset, theme,
+		} = this.props;
+		const { currentValue } = this.state;
+		if (isLoading && loader && currentValue) {
+			return (
+				<div className={`${noSuggestions(
+					themePreset,
+					theme,
+				)} ${getClassName(this.props.innerClass, 'no-suggestion')}`}
+				>
+					<li>{loader}</li>
+				</div>
+			);
+		}
+		return null;
+	}
 
 	render() {
 		let suggestionsList = [];
@@ -437,7 +477,6 @@ class DataSearch extends Component {
 		}
 
 		const { theme, themePreset, renderSuggestions } = this.props;
-
 		return (
 			<Container style={this.props.style} className={this.props.className}>
 				{this.props.title && (
@@ -488,7 +527,7 @@ class DataSearch extends Component {
 										suggestions: this.props.suggestions,
 										parsedSuggestions: suggestionsList,
 									})}
-
+								{this.renderLoader()}
 								{!renderSuggestions && isOpen && suggestionsList.length ? (
 									<ul
 										className={`${suggestions(
@@ -585,6 +624,8 @@ DataSearch.propTypes = {
 	iconPosition: types.iconPosition,
 	innerClass: types.style,
 	innerRef: types.func,
+	isLoading: types.bool,
+	loader: types.title,
 	onBlur: types.func,
 	onFocus: types.func,
 	onKeyDown: types.func,
@@ -632,6 +673,7 @@ const mapStateToProps = (state, props) => ({
 		|| null,
 	suggestions: state.hits[props.componentId] && state.hits[props.componentId].hits,
 	themePreset: state.config.themePreset,
+	isLoading: state.isLoading[props.componentId],
 });
 
 const mapDispatchtoProps = dispatch => ({

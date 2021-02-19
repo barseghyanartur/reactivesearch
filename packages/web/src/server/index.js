@@ -34,7 +34,16 @@ const resultComponents = ['ResultCard', 'ResultList', 'ReactiveList', 'ReactiveM
 
 function getValue(state, id, defaultValue) {
 	if (!state) return defaultValue;
-	return state[id] || defaultValue;
+	if (state[id]) {
+		try {
+			const parsedValue = JSON.parse(state[id]);
+			return parsedValue;
+		} catch (error) {
+			// eslint-disable-next-line
+			console.log('REACTIVESEARCH - could not parse the search state for', id);
+		}
+	}
+	return defaultValue;
 }
 
 function parseValue(value, component) {
@@ -69,6 +78,7 @@ export default function initReactivesearch(componentCollection, searchState, set
 			url: settings.url && settings.url.trim() !== '' ? settings.url : 'https://scalr.api.appbase.io',
 			app: settings.app,
 			credentials,
+			transformRequest: settings.transformRequest || null,
 			type: settings.type ? settings.type : '*',
 		};
 		const appbaseRef = Appbase(config);
@@ -268,7 +278,7 @@ export default function initReactivesearch(componentCollection, searchState, set
 
 		appbaseRef.msearch({
 			type: config.type === '*' ? '' : config.type,
-			body: finalQuery,
+			body: config.transformRequest ? config.transformRequest(finalQuery) : finalQuery,
 		}).then((res) => {
 			orderOfQueries.forEach((component, index) => {
 				const response = res.responses[index];

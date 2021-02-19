@@ -10,6 +10,7 @@ import {
 	isEqual,
 	checkValueChange,
 	checkPropChange,
+	checkSomePropChange,
 	getClassName,
 	formatDate,
 } from '@appbaseio/reactivecore/lib/utils/helper';
@@ -47,11 +48,12 @@ class DatePicker extends Component {
 
 	componentWillReceiveProps(nextProps) {
 		checkPropChange(this.props.react, nextProps.react, () => this.setReact(nextProps));
-		checkPropChange(this.props.dataField, nextProps.dataField, () =>
+		checkSomePropChange(this.props, nextProps, ['dataField', 'nestedField'], () =>
 			this.updateQuery(
 				this.state.currentDate ? this.formatInputDate(this.state.currentDate) : null,
 				nextProps,
-			));
+			),
+		);
 		if (!isEqual(this.props.defaultSelected, nextProps.defaultSelected)) {
 			this.handleDateChange(nextProps.defaultSelected, true, nextProps);
 		} else if (
@@ -76,7 +78,7 @@ class DatePicker extends Component {
 
 	static defaultQuery = (value, props) => {
 		let query = null;
-		if (value && props.queryFormat) {
+		if (value) {
 			query = {
 				range: {
 					[props.dataField]: {
@@ -86,17 +88,33 @@ class DatePicker extends Component {
 				},
 			};
 		}
+
+		if (query && props.nestedField) {
+			return {
+				query: {
+					nested: {
+						path: props.nestedField,
+						query,
+					},
+				},
+			};
+		}
 		return query;
 	};
 
 	clearDayPicker = () => {
 		if (this.state.currentDate !== '') {
-			this.handleDateChange(''); // resets the day picker component
+			this.setState({
+				currentDate: '',
+			});
 		}
 	};
 
-	handleDayPicker = (date) => {
-		this.handleDateChange(date || '');
+	handleDayPicker = (selectedDay, modifiers, dayPickerInput) => {
+		// Check no of characters in input and than fire the query
+		if (dayPickerInput.getInput().value.length === 10) {
+			this.handleDateChange(selectedDay || '');
+		}
 	};
 
 	handleDateChange = (currentDate, isDefaultValue = false, props = this.props) => {
@@ -175,9 +193,6 @@ class DatePicker extends Component {
 						}}
 						clickUnselectsDay={this.props.clickUnselectsDay}
 						onDayChange={this.handleDayPicker}
-						inputProps={{
-							readOnly: true,
-						}}
 						classNames={{
 							container:
 								getClassName(this.props.innerClass, 'daypicker-container')
@@ -191,8 +206,9 @@ class DatePicker extends Component {
 						}}
 						{...this.props.dayPickerInputProps}
 					/>
-					{this.props.showClear
-						&& this.state.currentDate && <CancelSvg onClick={this.clearDayPicker} />}
+					{this.props.showClear && this.state.currentDate && (
+						<CancelSvg onClick={this.clearDayPicker} />
+					)}
 				</Flex>
 			</DateContainer>
 		);
@@ -217,8 +233,10 @@ DatePicker.propTypes = {
 	focused: types.bool,
 	initialMonth: types.dateObject,
 	innerClass: types.style,
+	nestedField: types.string,
 	numberOfMonths: types.number,
 	onQueryChange: types.func,
+	parseDate: types.func,
 	placeholder: types.string,
 	queryFormat: types.queryFormatDate,
 	react: types.react,

@@ -9,11 +9,15 @@ import ReactiveComponent from './components/basic/ReactiveComponent.jsx';
 import SelectedFilters from './components/basic/SelectedFilters.jsx';
 import SingleRange from './components/range/SingleRange.jsx';
 import MultiRange from './components/range/MultiRange.jsx';
+import ResultCard from './components/result/ResultCard.jsx';
+import ResultList from './components/result/ResultList.jsx';
 import RangeSlider from './components/range/RangeSlider.jsx'
 import version from './components/Version/index';
 
 const components = [
 	ReactiveList,
+	ResultCard,
+	ResultList,
 	ReactiveBase,
 	DataSearch,
 	SingleList,
@@ -42,13 +46,15 @@ export {
 	version,
 	install,
 	ReactiveList,
+	ResultCard,
+	ResultList,
 	ReactiveBase,
 	DataSearch,
 	SingleList,
 	MultiList,
 	SingleRange,
 	MultiRange,
-  RangeSlider,
+  	RangeSlider,
 	ReactiveComponent,
 	SelectedFilters,
 	SingleDropdownList,

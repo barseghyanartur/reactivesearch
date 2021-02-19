@@ -10,6 +10,7 @@ import {
 	isEqual,
 	checkValueChange,
 	checkPropChange,
+	checkSomePropChange,
 	getClassName,
 	formatDate,
 } from '@appbaseio/reactivecore/lib/utils/helper';
@@ -99,7 +100,7 @@ class DateRange extends Component {
 				);
 			}
 		}
-		checkPropChange(this.props.dataField, nextProps.dataField, () =>
+		checkSomePropChange(this.props, nextProps, ['dataField', 'nestedField'], () =>
 			this.updateQuery(
 				this.state.currentDate
 					? {
@@ -109,7 +110,8 @@ class DateRange extends Component {
 					} // prettier-ignore
 					: this.state.currentDate,
 				nextProps,
-			));
+			),
+		);
 	}
 
 	componentWillUnmount() {
@@ -127,7 +129,7 @@ class DateRange extends Component {
 		return xdate.valid() ? xdate.toString('yyyy-MM-dd') : '';
 	};
 
-	defaultQuery = (value, props) => {
+	static defaultQuery = (value, props) => {
 		let query = null;
 		if (value) {
 			if (Array.isArray(props.dataField) && props.dataField.length === 2) {
@@ -171,11 +173,27 @@ class DateRange extends Component {
 				};
 			}
 		}
+
+		if (query && props.nestedField) {
+			return {
+				query: {
+					nested: {
+						path: props.nestedField,
+						query,
+					},
+				},
+			};
+		}
+
 		return query;
 	};
 
 	getEndDateRef = (ref) => {
 		this.endDateRef = ref;
+	};
+
+	getStartDateRef = (ref) => {
+		this.startDateRef = ref;
 	};
 
 	clearDayPickerStart = () => {
@@ -193,23 +211,27 @@ class DateRange extends Component {
 	handleStartDate = (date, autoFocus = true) => {
 		const { currentDate } = this.state;
 		const end = currentDate ? currentDate.end : '';
-		this.handleDateChange({
-			start: date,
-			end,
-		});
-		// focus the end date DayPicker if its empty
-		if (this.props.autoFocusEnd && autoFocus) {
-			// TODO: replace with a single date component in v2.1.0
-			window.setTimeout(() => this.endDateRef.getInput().focus(), 0);
+		if (this.startDateRef.getInput().value.length === 10) {
+			this.handleDateChange({
+				start: date,
+				end,
+			});
+			// focus the end date DayPicker if its empty
+			if (this.props.autoFocusEnd && autoFocus) {
+				this.endDateRef.getInput().focus();
+			}
 		}
 	};
 
-	handleEndDate = (date) => {
+	handleEndDate = (selectedDay) => {
 		const { currentDate } = this.state;
-		this.handleDateChange({
-			start: currentDate ? currentDate.start : '',
-			end: date,
-		});
+		if (this.endDateRef.getInput().value.length === 10) {
+			this.handleDayMouseEnter(selectedDay);
+			this.handleDateChange({
+				start: currentDate ? currentDate.start : '',
+				end: selectedDay,
+			});
+		}
 	};
 
 	handleDayMouseEnter = (day) => {
@@ -252,7 +274,7 @@ class DateRange extends Component {
 
 	updateQuery = (value, props) => {
 		if (!value || (value && value.start.length && value.end.length)) {
-			const query = props.customQuery || this.defaultQuery;
+			const query = props.customQuery || DateRange.defaultQuery;
 
 			props.updateQuery({
 				componentId: props.componentId,
@@ -295,6 +317,7 @@ class DateRange extends Component {
 						}}
 					>
 						<DayPickerInput
+							ref={this.getStartDateRef}
 							showOverlay={this.props.focused}
 							formatDate={this.formatInputDate}
 							value={start}
@@ -309,9 +332,6 @@ class DateRange extends Component {
 								modifiers,
 							}}
 							onDayChange={this.handleStartDate}
-							inputProps={{
-								readOnly: true,
-							}}
 							classNames={{
 								container:
 									getClassName(this.props.innerClass, 'daypicker-container')
@@ -363,9 +383,6 @@ class DateRange extends Component {
 								modifiers,
 							}}
 							onDayChange={this.handleEndDate}
-							inputProps={{
-								readOnly: true,
-							}}
 							classNames={{
 								container:
 									getClassName(this.props.innerClass, 'daypicker-container')
@@ -411,8 +428,10 @@ DateRange.propTypes = {
 	focused: types.bool,
 	initialMonth: types.dateObject,
 	innerClass: types.style,
+	nestedField: types.string,
 	numberOfMonths: types.number,
 	onQueryChange: types.func,
+	parseDate: types.func,
 	placeholder: types.rangeLabels,
 	queryFormat: types.queryFormatDate,
 	react: types.react,

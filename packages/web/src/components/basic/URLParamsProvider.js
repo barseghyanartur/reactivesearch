@@ -10,7 +10,10 @@ const URLSearchParams = require('url-search-params');
 
 class URLParamsProvider extends Component {
 	componentDidMount() {
-		this.params = new URLSearchParams(window.location.search);
+		const searchParams = this.props.getSearchParams
+			? this.props.getSearchParams()
+			: window.location.search;
+		this.params = new URLSearchParams(searchParams);
 		this.currentSelectedState = this.props.selectedValues || {};
 		window.onpopstate = () => {
 			const activeComponents = Array.from(this.params.keys());
@@ -24,7 +27,11 @@ class URLParamsProvider extends Component {
 
 			// update active components in selectedValues
 			Array.from(this.params.entries()).forEach((item) => {
-				this.props.setValue(item[0], JSON.parse(item[1]));
+				try {
+					this.props.setValue(item[0], JSON.parse(item[1]));
+				} catch (e) {
+					// Do not set value if JSON parsing fails.
+				}
 			});
 		};
 	}
@@ -32,7 +39,10 @@ class URLParamsProvider extends Component {
 	componentWillReceiveProps(nextProps) {
 		this.currentSelectedState = nextProps.selectedValues;
 		if (!isEqual(this.props.selectedValues, nextProps.selectedValues)) {
-			this.params = new URLSearchParams(window.location.search);
+			const searchParams = this.props.getSearchParams
+			  ? this.props.getSearchParams()
+			  : window.location.search;
+			this.params = new URLSearchParams(searchParams);
 			const currentComponents = Object.keys(nextProps.selectedValues);
 			const urlComponents = Array.from(this.params.keys());
 
@@ -44,11 +54,19 @@ class URLParamsProvider extends Component {
 						this.hasValidValue(this.props.selectedValues[component])
 						|| this.hasValidValue(nextProps.selectedValues[component])
 					) {
-						if (nextProps.selectedValues[component].URLParams) {
-							this.setURL(
-								component,
-								this.getValue(nextProps.selectedValues[component].value),
-							);
+						const selectedValues = nextProps.selectedValues[component];
+						if (selectedValues.URLParams) {
+							if (selectedValues.category) {
+								this.setURL(
+									component,
+									this.getValue({
+										category: selectedValues.category,
+										value: selectedValues.value,
+									}),
+								);
+							} else {
+								this.setURL(component, this.getValue(selectedValues.value));
+							}
 						} else {
 							this.params.delete(component);
 							this.pushToHistory();
@@ -96,13 +114,17 @@ class URLParamsProvider extends Component {
 		} else if (value && typeof value === 'object') {
 			// TODO: support for NestedList
 			if (value.location) return value;
+			if (value.category) return value;
 			return value.label || value.key || null;
 		}
 		return value;
 	}
 
 	setURL(component, value) {
-		this.params = new URLSearchParams(window.location.search);
+		const searchParams = this.props.getSearchParams
+			? this.props.getSearchParams()
+			: window.location.search;
+		this.params = new URLSearchParams(searchParams);
 		if (
 			!value
 			|| (typeof value === 'string' && value.trim() === '')
@@ -120,11 +142,13 @@ class URLParamsProvider extends Component {
 	}
 
 	pushToHistory() {
-		if (window.history.pushState) {
-			const paramsSting = this.params.toString() ? `?${this.params.toString()}` : '';
-			const base = window.location.href.split('?')[0];
-			const newurl = `${base}${paramsSting}`;
-			window.history.pushState({ path: newurl }, '', newurl);
+		const paramsSting = this.params.toString() ? `?${this.params.toString()}` : '';
+		const base = window.location.href.split('?')[0];
+		const newURL = `${base}${paramsSting}`;
+		if (this.props.setSearchParams) {
+			this.props.setSearchParams(newURL);
+		} else if (window.history.pushState) {
+			window.history.pushState({ path: newURL }, '', newURL);
 		}
 	}
 
@@ -146,6 +170,8 @@ URLParamsProvider.propTypes = {
 	headers: types.headers,
 	style: types.style,
 	className: types.string,
+	getSearchParams: types.func,
+	setSearchParams: types.func,
 };
 
 URLParamsProvider.defaultProps = {
