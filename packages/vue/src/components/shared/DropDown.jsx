@@ -5,17 +5,22 @@ import Input, { suggestionsContainer, suggestions } from '../../styles/Input';
 import types from '../../utils/vueTypes';
 import Select, { Tick } from '../../styles/Select';
 import Chevron from '../../styles/Chevron';
+import { isFunction } from '../../utils/index';
 
 const { getClassName } = helper;
 const Dropdown = {
 	data() {
 		this.__state = {
 			isOpen: false,
-			searchTerm: ''
+			searchTerm: '',
 		};
 		return this.__state;
 	},
-	inject: ['theme'],
+	inject: {
+		theme: {
+			from: 'theme_reactivesearch',
+		},
+	},
 	props: {
 		innerClass: types.style,
 		items: types.data,
@@ -24,7 +29,11 @@ const Dropdown = {
 		multi: types.bool, // change event
 		placeholder: types.string,
 		returnsObject: types.bool,
-		renderListItem: types.func,
+		customLabelRenderer: types.func,
+		hasCustomRenderer: types.bool,
+		customRenderer: types.func,
+		renderItem: types.func,
+		renderNoResults: VueTypes.any,
 		handleChange: types.func,
 		transformData: types.func,
 		selectedItem: types.selectedValue,
@@ -32,7 +41,7 @@ const Dropdown = {
 		single: types.bool,
 		small: VueTypes.bool.def(false),
 		themePreset: types.themePreset,
-		showSearch: types.bool
+		showSearch: types.bool,
 	},
 
 	render() {
@@ -43,15 +52,38 @@ const Dropdown = {
 			labelField,
 			keyField,
 			themePreset,
-			renderListItem,
+			renderItem,
 			transformData,
-			footer
+			footer,
+			customLabelRenderer,
+			hasCustomRenderer,
+			customRenderer,
 		} = this.$props;
 		let itemsToRender = items;
 
 		if (transformData) {
 			itemsToRender = transformData(itemsToRender);
 		}
+
+		var filteredItemsToRender = itemsToRender.filter(item => {
+			if (String(item[labelField]).length) {
+				if (
+					this.$props.showSearch
+					&& this.$data.searchTerm
+				) {
+					return String(item[labelField])
+						.toLowerCase()
+						.includes(
+							this.$data.searchTerm.toLowerCase(),
+						);
+				}
+
+				return true;
+			}
+
+			return false;
+		})
+
 		return (
 			<Downshift
 				isOpen={this.$data.isOpen}
@@ -64,16 +96,16 @@ const Dropdown = {
 						isOpen,
 						highlightedIndex,
 						getButtonProps,
-						getItemEvents
+						getItemEvents,
 					}) => (
 						<div class={suggestionsContainer}>
 							<Select
 								{...{
 									on: {
 										...getButtonProps({
-											onClick: this.toggle
-										})
-									}
+											onClick: this.toggle,
+										}),
+									},
 								}}
 								class={getClassName(this.$props.innerClass, 'select') || ''}
 								title={
@@ -82,14 +114,27 @@ const Dropdown = {
 								small={this.$props.small}
 								themePreset={this.$props.themePreset}
 							>
-								<div>
-									{selectedItem
-										? this.renderToString(selectedItem)
-										: placeholder}
-								</div>
+								{customLabelRenderer ? (
+									customLabelRenderer(selectedItem)
+								) : (
+									<div>
+										{selectedItem
+											? this.renderToString(selectedItem)
+											: placeholder}
+									</div>
+								)}
 								<Chevron open={isOpen} />
 							</Select>
-							{isOpen && itemsToRender.length ? (
+							{/* eslint-disable-next-line no-nested-ternary */}
+							{hasCustomRenderer ? (
+								customRenderer(itemsToRender, {
+									getItemProps,
+									isOpen,
+									highlightedIndex,
+									getButtonProps,
+									getItemEvents,
+								})
+							) : isOpen && itemsToRender.length ? (
 								<ul
 									class={`${suggestions(themePreset, this.theme)} ${
 										this.$props.small ? 'small' : ''
@@ -100,7 +145,7 @@ const Dropdown = {
 											id={`${this.$props.componentId}-input`}
 											style={{
 												border: 0,
-												borderBottom: '1px solid #ddd'
+												borderBottom: '1px solid #ddd',
 											}}
 											showIcon={false}
 											class={getClassName(this.$props.innerClass, 'input')}
@@ -110,68 +155,66 @@ const Dropdown = {
 											themePreset={themePreset}
 										/>
 									) : null}
-									{itemsToRender
-										.filter(item => {
-											if (String(item[labelField]).length) {
-												if (this.$props.showSearch && this.$data.searchTerm) {
-													return String(item[labelField])
-														.toLowerCase()
-														.includes(this.$data.searchTerm.toLowerCase());
-												}
-
-												return true;
-											}
-
-											return false;
-										})
-										.map((item, index) => {
+									{(!hasCustomRenderer && filteredItemsToRender.length === 0 )
+										? this.renderNoResult() :
+											filteredItemsToRender.map((item, index) => {
 											let selected
 												= this.$props.multi // MultiDropdownList
 												&& ((selectedItem && !!selectedItem[item[keyField]]) // MultiDropdownRange
 													|| (Array.isArray(selectedItem)
 														&& selectedItem.find(
-															value => value[labelField] === item[labelField]
+															value =>
+																value[labelField]
+																=== item[labelField],
 														)));
 											if (!this.$props.multi)
 												selected = item.key === selectedItem;
 											return (
 												<li
 													{...{
-														domProps: getItemProps({ item })
+														domProps: getItemProps({ item }),
 													}}
 													{...{
 														on: getItemEvents({
-															item
-														})
+															item,
+														}),
 													}}
 													key={item[keyField]}
 													class={`${selected ? 'active' : ''}`}
 													style={{
 														backgroundColor: this.getBackgroundColor(
 															highlightedIndex === index,
-															selected
-														)
+															selected,
+														),
 													}}
 												>
-													{renderListItem ? (
-														renderListItem({
+													{renderItem ? (
+														renderItem({
 															label: item[labelField],
-															count: item.doc_count
+															count: item.doc_count,
+															isChecked:
+																selected && this.$props.multi,
 														})
 													) : (
 														<div>
-															{typeof item[labelField] === 'string' ? (
-																<span domPropsInnerHTML={item[labelField]} />
-															) : (
-																item[labelField]
-															)}
+															{typeof item[labelField]
+															=== 'string' ? (
+																	<span
+																		domPropsInnerHTML={
+																			item[labelField]
+																		}
+																	/>
+																) : (
+																	item[labelField]
+																)}
 															{this.$props.showCount
 																&& item.doc_count && (
 																<span
 																	class={
 																		getClassName(
-																			this.$props.innerClass,
-																			'count'
+																			this.$props
+																				.innerClass,
+																			'count',
 																		) || ''
 																	}
 																>
@@ -184,8 +227,10 @@ const Dropdown = {
 													{selected && this.$props.multi ? (
 														<Tick
 															class={
-																getClassName(this.$props.innerClass, 'icon')
-																|| ''
+																getClassName(
+																	this.$props.innerClass,
+																	'icon',
+																) || ''
 															}
 														/>
 													) : null}
@@ -196,7 +241,7 @@ const Dropdown = {
 								</ul>
 							) : null}
 						</div>
-					)
+					),
 				}}
 			/>
 		);
@@ -231,7 +276,8 @@ const Dropdown = {
 
 			if (highlighted) {
 				return isDark ? '#555' : '#eee';
-			} else if (selected) {
+			}
+			if (selected) {
 				return isDark ? '#686868' : '#fafafa';
 			}
 
@@ -244,13 +290,22 @@ const Dropdown = {
 		},
 
 		renderToString(value) {
+			const { customLabelRenderer } = this.$props;
+			if (customLabelRenderer) {
+				const customLabel = customLabelRenderer(value);
+				if (typeof customLabel === 'string') {
+					return customLabel;
+				}
+			}
 			if (Array.isArray(value) && value.length) {
 				const arrayToRender = value.map(item => this.renderToString(item));
 				return arrayToRender.join(', ');
-			} else if (value && typeof value === 'object') {
+			}
+			if (value && typeof value === 'object') {
 				if (value[this.$props.labelField]) {
 					return value[this.$props.labelField];
-				} else if (Object.keys(value).length) {
+				}
+				if (Object.keys(value).length) {
 					return this.renderToString(Object.keys(value));
 				}
 
@@ -258,7 +313,17 @@ const Dropdown = {
 			}
 
 			return value;
-		}
-	}
+		},
+
+		renderNoResult() {
+			const renderNoResults
+				= this.$scopedSlots.renderNoResults || this.$props.renderNoResults;
+			return (
+				<p class={getClassName(this.$props.innerClass, 'noResults') || null}>
+					{isFunction(renderNoResults) ? renderNoResults() : renderNoResults}
+				</p>
+			);
+		},
+	},
 };
 export default Dropdown;

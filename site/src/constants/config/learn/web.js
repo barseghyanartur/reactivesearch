@@ -9,11 +9,10 @@ export default {
 	title: 'Get Started with Reactive Search',
 	description: (
 		<React.Fragment>
-			Use our step-by-step guide to learn all about Reactive Search, or check
-			out our{' '}
+			Use our step-by-step guide to learn all about Reactive Search, or check out our{' '}
 			<a
 				rel="noopener noreferrer"
-				href="https://opensource.appbase.io/reactive-manual/getting-started/reactivesearch.html"
+				href="https://docs.appbase.io/docs/reactivesearch/v3/overview/quickstart/"
 				target="_blank"
 			>
 				docs
@@ -35,11 +34,7 @@ export default {
 				'ReactiveSearch components can connect to an Elasticsearch index hosted anywhere.',
 				<React.Fragment>
 					Create a free app (aka index) with{' '}
-					<a
-						rel="noopener noreferrer"
-						href="https://appbase.io"
-						target="_blank"
-					>
+					<a rel="noopener noreferrer" href="https://appbase.io" target="_blank">
 						appbase.io
 					</a>
 					.
@@ -48,8 +43,7 @@ export default {
 			links: [
 				{
 					title: 'READ MORE',
-					href:
-						'https://opensource.appbase.io/reactive-manual/getting-started/reactivebase.html',
+					href: 'https://docs.appbase.io/docs/reactivesearch/v3/overview/reactivebase/',
 				},
 			],
 		},
@@ -61,12 +55,12 @@ export default {
 			links: [
 				{
 					title: 'Dejavu',
-					href: 'https://opensource.appbase.io/dejavu',
+					href: 'https://dejavu.appbase.io/',
 				},
 				{
 					title: 'Read more',
 					href:
-						'https://opensource.appbase.io/reactive-manual/getting-started/data.html#importing-custom-data',
+						'https://docs.appbase.io/docs/reactivesearch/v3/overview/importing/#importing-custom-data',
 				},
 			],
 		},
@@ -77,7 +71,7 @@ export default {
 					Add UI components for{' '}
 					<a
 						rel="noopener noreferrer"
-						href="https://opensource.appbase.io/reactive-manual/search-components/datasearch.html"
+						href="https://docs.appbase.io/docs/reactivesearch/v3/search/datasearch/"
 						target="_blank"
 					>
 						Search
@@ -85,7 +79,7 @@ export default {
 					,{' '}
 					<a
 						rel="noopener noreferrer"
-						href="https://opensource.appbase.io/reactive-manual/list-components/singlelist.html"
+						href="https://docs.appbase.io/docs/reactivesearch/v3/list/singlelist/"
 						target="_blank"
 					>
 						Lists
@@ -93,7 +87,7 @@ export default {
 					,{' '}
 					<a
 						rel="noopener noreferrer"
-						href="https://opensource.appbase.io/reactive-manual/range-components/singlerange.html"
+						href="https://docs.appbase.io/docs/reactivesearch/v3/range/singlerange/"
 						target="_blank"
 					>
 						Ranges
@@ -101,7 +95,7 @@ export default {
 					, and{' '}
 					<a
 						rel="noopener noreferrer"
-						href="https://opensource.appbase.io/reactive-manual/result-components/resultlist.html"
+						href="https://docs.appbase.io/docs/reactivesearch/v3/result/reactivelist/"
 						target="_blank"
 					>
 						Results
@@ -112,18 +106,18 @@ export default {
 					Or add in your own{' '}
 					<a
 						rel="noopener noreferrer"
-						href="https://opensource.appbase.io/reactive-manual/advanced/reactivecomponent.html"
+						href="https://docs.appbase.io/docs/reactivesearch/v3/advanced/reactivecomponent/"
 						target="_blank"
 					>
 						UI components
-					</a>.
+					</a>
+					.
 				</React.Fragment>,
 			],
 			links: [
 				{
 					title: 'COMPONENTS OVERVIEW',
-					href:
-						'https://opensource.appbase.io/reactive-manual/getting-started/componentsindex.html',
+					href: 'https://docs.appbase.io/docs/reactivesearch/v3/overview/components/',
 				},
 			],
 		},
@@ -164,11 +158,9 @@ export default {
 			links: [
 				{
 					title: 'Read more tutorials',
-					href:
-						'https://medium.appbase.io/tagged/appbase',
+					href: 'https://medium.appbase.io/tagged/appbase',
 				},
 			],
-
 		},
 		{
 			title: 'ReactiveSearch for <X>',
@@ -178,7 +170,7 @@ export default {
 					<li>
 						<a
 							rel="noopener noreferrer"
-							href="https://opensource.appbase.io/reactivesearch/native"
+							href="https://docs.appbase.io/docs/reactivesearch/native/overview/QuickStart/"
 							target="_blank"
 						>
 							React Native
@@ -187,7 +179,7 @@ export default {
 					<li>
 						<a
 							rel="noopener noreferrer"
-							href="https://opensource.appbase.io/reactivesearch/vue"
+							href="https://docs.appbase.io/docs/reactivesearch/vue/overview/QuickStart/"
 							target="_blank"
 						>
 							Vue.JS
@@ -196,7 +188,7 @@ export default {
 					<li>
 						<a
 							rel="noopener noreferrer"
-							href="https://opensource.appbase.io/reactivemaps"
+							href="https://docs.appbase.io/docs/reactivesearch/v3/overview/reactivemaps/"
 							target="_blank"
 						>
 							Maps
@@ -214,12 +206,11 @@ export default {
 				'Go from scratch to creating a data-driven search app with our beginner friendly quick start guide.',
 			button: {
 				title: 'Get Started',
-				href:
-					'#',
+				href: '#',
 			},
 			link: {
 				title: 'Docs',
-				href: 'https://opensource.appbase.io/reactive-manual',
+				href: 'https://docs.appbase.io/',
 			},
 		},
 		{

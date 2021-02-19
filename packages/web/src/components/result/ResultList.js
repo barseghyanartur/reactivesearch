@@ -1,78 +1,68 @@
 import React, { Component } from 'react';
-
-import { getClassName } from '@appbaseio/reactivecore/lib/utils/helper';
+import { oneOfType } from 'prop-types';
 import types from '@appbaseio/reactivecore/lib/utils/types';
 import Title from '../../styles/Title';
-import ListItem, { container, Image } from '../../styles/ListItem';
-import ReactiveList from './ReactiveList';
+import ListItem from '../../styles/ListItem';
+import ResultListImage from './addons/ResultListImage';
 
 class ResultList extends Component {
-	static generateQueryOptions = props => ReactiveList.generateQueryOptions(props);
+	static Image = ResultListImage;
+	static Content = ({ children, ...props }) => <article {...props}>{children}</article>;
+	static Title = ({ children, ...props }) => <Title {...props}>{children}</Title>;
+	static Description = ({ children, ...props }) => <div {...props}>{children}</div>;
 
-	renderAsListItem = (item, triggerClickAnalytics) => {
-		const result = this.props.onData(item);
-
-		if (result) {
-			return (
-				<ListItem
-					key={item._id}
-					href={result.url}
-					image={!!result.image}
-					small={result.image_size === 'small'}
-					className={getClassName(this.props.innerClass, 'listItem')}
-					target={this.props.target}
-					rel={this.props.target === '_blank' ? 'noopener noreferrer' : null}
-					onClick={triggerClickAnalytics}
-					{...result.containerProps}
-				>
-					{result.image ? (
-						<Image
-							src={result.image}
-							small={result.image_size === 'small'}
-							className={getClassName(this.props.innerClass, 'image')}
-						/>
-					) : null}
-					<article>
-						{typeof result.title === 'string' ? (
-							<Title
-								dangerouslySetInnerHTML={{
-									__html: result.title,
-								}}
-								className={getClassName(this.props.innerClass, 'title')}
-							/>
-						) : (
-							<Title className={getClassName(this.props.innerClass, 'title')}>
-								{result.title}
-							</Title>
-						)}
-						{typeof result.description === 'string' ? (
-							<div
-								dangerouslySetInnerHTML={{
-									__html: result.description,
-								}}
-							/>
-						) : (
-							<div>{result.description}</div>
-						)}
-					</article>
-				</ListItem>
-			);
-		}
-
-		return null;
+	state = {
+		hasImage: false,
+		isSmall: false,
 	};
 
-	render() {
-		const { onData, ...props } = this.props;
+	componentDidMount() {
+		let hasImage = false;
+		let isSmall = false;
+		const { children } = this.props;
+		const ImageChild = React.Children.toArray(children).find(
+			o => o.type && o.type.name === ResultListImage.name,
+		);
+		if (ImageChild) {
+			hasImage = true;
+			if (ImageChild.props.small) {
+				isSmall = true;
+			}
+		}
 
-		return <ReactiveList {...props} onData={this.renderAsListItem} listClass={container} />;
+		// eslint-disable-next-line
+		this.setState({
+			hasImage,
+			isSmall,
+		});
+	}
+
+	render() {
+		const {
+			children, id, href, target, ...props
+		} = this.props;
+		const { hasImage, isSmall } = this.state;
+		return (
+			<ListItem
+				id={id}
+				href={href}
+				image={hasImage}
+				small={isSmall}
+				target={target}
+				rel={target === '_blank' ? 'noopener noreferrer' : null}
+				{...props}
+			>
+				{children}
+			</ListItem>
+		);
 	}
 }
 
 ResultList.propTypes = {
-	innerClass: types.style,
+	children: types.children,
 	target: types.stringRequired,
-	onData: types.func,
+	href: types.string,
+	id: oneOfType([types.string, types.number]),
 };
 
 ResultList.defaultProps = {

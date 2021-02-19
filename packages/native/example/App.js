@@ -1,4 +1,4 @@
-import Expo from 'expo';
+import { registerRootComponent, Font } from 'expo';
 import React, { Component } from 'react';
 import { View, ScrollView, FlatList } from 'react-native';
 import { Text, Header, Body, Title } from 'native-base';
@@ -6,7 +6,6 @@ import { Text, Header, Body, Title } from 'native-base';
 import {
 	ReactiveBase,
 	DataSearch,
-	TextField,
 	SingleDropdownList,
 	MultiDropdownList,
 	SingleDropdownRange,
@@ -21,10 +20,10 @@ import {
 class Main extends Component {
 	state = {
 		isReady: false,
-	}
+	};
 
 	async componentWillMount() {
-		await Expo.Font.loadAsync({
+		await Font.loadAsync({
 			Roboto: require('native-base/Fonts/Roboto.ttf'), // eslint-disable-line global-require
 			Roboto_medium: require('native-base/Fonts/Roboto_medium.ttf'), // eslint-disable-line global-require
 			Ionicons: require('@expo/vector-icons/fonts/Ionicons.ttf'), // eslint-disable-line global-require
@@ -40,12 +39,12 @@ class Main extends Component {
 			keyExtractor={item => item._id}
 			renderItem={({ item }) => (
 				<View style={{ margin: 5 }}>
-					<Text
-						style={{ flex: 1, fontWeight: 'bold' }}
-					>
-						{this.parseToElement(item.name)}
+					<Text style={{ flex: 1, fontWeight: 'bold' }}>
+						{this.parseToElement(item.model)}
 					</Text>
-					<Text>{item.brand} - {item.model}</Text>
+					<Text>
+						{item.brand} - {item.vehicleType} - {item.year}
+					</Text>
 				</View>
 			)}
 			onEndReachedThreshold={0.5}
@@ -54,6 +53,7 @@ class Main extends Component {
 	);
 
 	parseToElement = (str) => {
+		if (!str) return null;
 		const start = str.indexOf('<em>');
 		const end = str.indexOf('</em>');
 
@@ -72,7 +72,7 @@ class Main extends Component {
 		}
 
 		return str;
-	}
+	};
 
 	render() {
 		if (!this.state.isReady) {
@@ -81,9 +81,8 @@ class Main extends Component {
 
 		return (
 			<ReactiveBase
-				app="car-store"
-				credentials="cf7QByt5e:d2d60548-82a9-43cc-8b40-93cbbe75c34c"
-				type="cars"
+				app="carstore-dataset"
+				credentials="4HWI27QmA:58c731f7-79ab-4f55-a590-7e15c7e36721"
 				// theme={{
 				// 	textColor: 'yellow',
 				// }}
@@ -96,44 +95,22 @@ class Main extends Component {
 				<ScrollView>
 					<View style={{ padding: 10 }}>
 						<SelectedFilters />
-						<SingleDropdownList
-							componentId="StComponent"
-							dataField="brand.raw"
-						/>
+						<SingleDropdownList componentId="StComponent" dataField="brand.keyword" />
 
 						<MultiDropdownList
 							componentId="MultiDropdownListComponent"
-							dataField="brand.raw"
+							dataField="brand.keyword"
 							selectAllLabel="All"
 						/>
 
-						<TextField
-							componentId="TextFieldComponent"
-							dataField="color"
-							placeholder="Search color"
-							innerStyle={{
-								icon: {
-									color: 'blue',
-								},
-							}}
-							innerProps={{
-								icon: {
-									color: 'yellow',
-								},
-							}}
-						/>
-
-						<DatePicker
-							dataField="someField"
-							componentId="DatePicker"
-						/>
+						<DatePicker dataField="year" componentId="DatePicker" />
 
 						<DateRange
-							dataField="someField"
+							dataField="year"
 							componentId="DateRange"
 							defaultSelected={{
-								start: '2017-04-04',
-								end: '2017-04-10',
+								start: '2015-04-04',
+								end: '2016-04-10',
 							}}
 						/>
 
@@ -141,10 +118,10 @@ class Main extends Component {
 							componentId="SingleDropdownRange"
 							dataField="price"
 							data={[
-								{ start: 0, end: 100, label: 'Cheap' },
-								{ start: 101, end: 200, label: 'Moderate' },
-								{ start: 201, end: 500, label: 'Pricey' },
-								{ start: 501, end: 1000, label: 'First Date' },
+								{ start: 1000, end: 3000, label: 'Cheap' },
+								{ start: 3001, end: 5000, label: 'Moderate' },
+								{ start: 5001, end: 10000, label: 'Pricey' },
+								{ start: 10001, end: 100000, label: 'First Date' },
 							]}
 							defaultSelected="Pricey"
 						/>
@@ -153,10 +130,10 @@ class Main extends Component {
 							componentId="MultiDropdownRange"
 							dataField="price"
 							data={[
-								{ start: 0, end: 100, label: 'Cheap' },
-								{ start: 101, end: 200, label: 'Moderate' },
-								{ start: 201, end: 500, label: 'Pricey' },
-								{ start: 501, end: 1000, label: 'First Date' },
+								{ start: 1000, end: 3000, label: 'Cheap' },
+								{ start: 3001, end: 5000, label: 'Moderate' },
+								{ start: 5001, end: 10000, label: 'Pricey' },
+								{ start: 10001, end: 100000, label: 'First Date' },
 							]}
 							defaultSelected={['Pricey', 'First Date']}
 							innerStyle={{
@@ -177,25 +154,21 @@ class Main extends Component {
 
 						<DataSearch
 							componentId="DataSearchComponent"
-							dataField="name"
-							defaultSelected="Nissan"
+							dataField={['model', 'model.search']}
+							defaultSelected="Nitro"
 							react={{
 								and: 'TextFieldComponent',
 							}}
 						/>
 
 						<ReactiveList
-							dataField="name"
+							dataField="model.keyword"
 							componentId="ReactiveList"
 							size={20}
 							onAllData={this.onAllData}
 							pagination
-							stream
 							react={{
-								and: [
-									'DataSearchComponent',
-									'StComponent',
-								],
+								and: ['DataSearchComponent', 'StComponent'],
 							}}
 						/>
 					</View>
@@ -206,4 +179,4 @@ class Main extends Component {
 }
 
 module.exports = Main;
-Expo.registerRootComponent(Main);
+registerRootComponent(Main);

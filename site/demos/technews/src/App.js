@@ -15,7 +15,8 @@ const App = () => (
 		<Container>
 			<ReactiveBase
 				app="hackernews-live"
-				credentials="kxBY7RnNe:4d69db99-6049-409d-89bd-e1202a2ad48e"
+				url="https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io"
+				enableAppbase
 				theme={theme}
 			>
 				<Header />

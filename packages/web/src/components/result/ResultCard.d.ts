@@ -1,14 +1,30 @@
 import * as React from 'react';
-import { CommonProps } from '../../';
 import * as types from '../../types';
-import { ReactiveListProps } from './ReactiveList';
 
-export interface ResultCardProps extends ReactiveListProps {
-	innerClass?: types.style;
-	target: string;
-	onData?: (...args: any[]) => any;
+declare namespace ResultCardTree {
+	interface ResultCardProps {
+		target?: string;
+		children: React.ReactNode;
+		href?: string;
+		id?: string|number;
+	}
+
+	interface ImageProps extends React.HTMLAttributes<HTMLDivElement> {
+		src: string;
+	}
+
+	interface TitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
+		children?: React.ReactNode;
+	}
+	interface DescriptionProps extends React.HTMLAttributes<HTMLDivElement> {
+		children?: React.ReactNode;
+	}
+
+	class ResultCard extends React.Component<ResultCardProps, any> {
+		static Image: React.ComponentClass<ImageProps>;
+		static Title: React.ComponentClass<TitleProps>;
+		static Description: React.ComponentClass<DescriptionProps>;
+	}
 }
 
-declare const ResultCard: React.ComponentType<ResultCardProps>;
-
-export default ResultCard;
+export default ResultCardTree.ResultCard;

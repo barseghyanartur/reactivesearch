@@ -1,34 +1,60 @@
+/** @jsx jsx */
+import { jsx } from '@emotion/core';
 import React, { Component } from 'react';
 import Downshift from 'downshift';
 import { withTheme } from 'emotion-theming';
+import hoistNonReactStatics from 'hoist-non-react-statics';
 
 import {
-	addComponent,
-	removeComponent,
-	watchComponent,
 	updateQuery,
 	setQueryOptions,
-	setQueryListener,
+	setCustomQuery,
+	setDefaultQuery,
+	setSuggestionsSearchValue,
+	recordSuggestionClick,
+	setCustomHighlightOptions,
+	loadPopularSuggestions,
 } from '@appbaseio/reactivecore/lib/actions';
 import {
 	debounce,
-	pushToAndClause,
 	checkValueChange,
-	checkPropChange,
 	checkSomePropChange,
+	getOptionsFromQuery,
 	getClassName,
+	isEqual,
+	getCompositeAggsQuery,
+	withClickIds,
+	handleOnSuggestions,
+	getResultStats,
+	updateCustomQuery,
+	updateDefaultQuery,
+	getTopSuggestions,
+	getQueryOptions,
 } from '@appbaseio/reactivecore/lib/utils/helper';
-
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
+import { getInternalComponentID } from '@appbaseio/reactivecore/lib/utils/transform';
 import types from '@appbaseio/reactivecore/lib/utils/types';
-import getSuggestions from '@appbaseio/reactivecore/lib/utils/suggestions';
 import causes from '@appbaseio/reactivecore/lib/utils/causes';
 import Title from '../../styles/Title';
-import Input, { suggestionsContainer, suggestions, noSuggestions } from '../../styles/Input';
+import Input, { suggestionsContainer, suggestions } from '../../styles/Input';
 import CancelSvg from '../shared/CancelSvg';
 import SearchSvg from '../shared/SearchSvg';
 import InputIcon from '../../styles/InputIcon';
 import Container from '../../styles/Container';
-import { connect } from '../../utils';
+import Mic from './addons/Mic';
+import {
+	connect,
+	isFunction,
+	getComponent,
+	hasCustomRenderer,
+	handleCaretPosition,
+	isQueryIdentical,
+	hasPopularSuggestionsRenderer,
+	getPopularSuggestionsComponent,
+} from '../../utils';
+import SuggestionItem from './addons/SuggestionItem';
+import SuggestionWrapper from './addons/SuggestionWrapper';
+import ComponentWrapper from '../basic/ComponentWrapper';
 
 const Text = withTheme(props => (
 	<span
@@ -45,91 +71,194 @@ class CategorySearch extends Component {
 	constructor(props) {
 		super(props);
 
+		const value = props.value || props.defaultValue || {};
+		// eslint-disable-next-line
+		let { term: currentValue = '', category: currentCategory = null } = value;
+		// add preference to selected-X value from URL/SSR
+		currentValue = props.selectedValue || currentValue;
+		currentCategory = props.selectedCategory || currentCategory;
+
 		this.state = {
-			currentValue: '',
+			currentValue,
+			currentCategory,
 			suggestions: [],
 			isOpen: false,
 		};
-		this.internalComponent = `${props.componentId}__internal`;
-		this.locked = false;
-		props.setQueryListener(props.componentId, props.onQueryChange, null);
-	}
+		/**
+		 * To regulate the query execution based on the input handler,
+		 * the component query will only get executed when it sets to `true`.
+		 * */
+		this.isPending = false;
 
-	componentWillMount() {
-		this.props.addComponent(this.props.componentId, 'CATEGORYSEARCH');
-		this.props.addComponent(this.internalComponent);
+		this.internalComponent = getInternalComponentID(props.componentId);
+		this.queryOptions = getQueryOptions(props);
+		// Set custom and default queries in store
+		updateCustomQuery(props.componentId, props, currentValue);
+		updateDefaultQuery(props.componentId, props, currentValue);
 
-		if (this.props.highlight) {
-			const queryOptions = CategorySearch.highlightQuery(this.props) || {};
-			queryOptions.size = 20;
-			this.props.setQueryOptions(this.props.componentId, queryOptions);
+		if (props.highlight) {
+			const queryOptions = CategorySearch.highlightQuery(props) || {};
+			if (props.customHighlight && typeof props.customHighlight === 'function') {
+				props.setCustomHighlightOptions(props.componentId, props.customHighlight(props));
+			}
+			queryOptions.size = props.size;
+			this.queryOptions = queryOptions;
+			props.setQueryOptions(props.componentId, queryOptions);
 		} else {
-			this.props.setQueryOptions(this.props.componentId, {
-				size: 20,
-			});
+			props.setQueryOptions(props.componentId, this.queryOptions);
 		}
-		this.setReact(this.props);
 
-		const aggsQuery = this.getAggsQuery(this.props.categoryField);
-		this.props.setQueryOptions(this.internalComponent, aggsQuery, false);
+		const aggsQuery = this.getCombinedAggsQuery();
+		props.setQueryOptions(this.internalComponent, aggsQuery, false);
+		const hasMounted = false;
+		const cause = null;
 
-		if (this.props.selectedValue) {
-			this.setValue(this.props.selectedValue, true);
-		} else if (this.props.defaultSelected) {
-			this.setValue(this.props.defaultSelected, true);
+		if (currentValue) {
+			const calcValue = {
+				term: currentValue,
+				category: currentCategory,
+			};
+			if (props.onChange) {
+				props.onChange(calcValue, () => this.triggerQuery(calcValue));
+			}
+			this.setValue(currentValue, true, props, currentCategory, cause, hasMounted);
 		}
 	}
 
-	componentWillReceiveProps(nextProps) {
+	componentDidUpdate(prevProps) {
 		checkSomePropChange(
 			this.props,
-			nextProps,
+			prevProps,
 			['highlight', 'dataField', 'highlightField'],
 			() => {
-				const queryOptions = CategorySearch.highlightQuery(nextProps) || {};
-				queryOptions.size = 20;
-				this.props.setQueryOptions(nextProps.componentId, queryOptions);
+				const queryOptions = CategorySearch.highlightQuery(this.props) || {};
+				if (
+					this.props.customHighlight
+					&& typeof this.props.customHighlight === 'function'
+				) {
+					this.props.setCustomHighlightOptions(
+						this.props.componentId,
+						this.props.customHighlight(this.props),
+					);
+				}
+				queryOptions.size = this.props.size;
+				this.queryOptions = queryOptions;
+				this.props.setQueryOptions(this.props.componentId, queryOptions);
 			},
 		);
 
-		checkPropChange(this.props.react, nextProps.react, () => this.setReact(nextProps));
+		// Treat defaultQuery and customQuery as reactive props
+		if (!isQueryIdentical(this.state.currentValue, this.props, prevProps, 'defaultQuery')) {
+			this.updateDefaultQuery(this.state.currentValue, this.props);
+			this.updateQuery(this.state.currentValue, this.props);
+		}
 
-		if (Array.isArray(nextProps.suggestions) && this.state.currentValue.trim().length) {
+		if (!isQueryIdentical(this.state.currentValue, this.props, prevProps, 'customQuery')) {
+			this.updateQuery(this.state.currentValue, this.props);
+		}
+
+		if (Array.isArray(this.props.suggestions) && this.state.currentValue.trim().length) {
 			// shallow check allows us to set suggestions even if the next set
 			// of suggestions are same as the current one
-			if (this.props.suggestions !== nextProps.suggestions) {
+
+			if (this.props.suggestions !== prevProps.suggestions) {
+				if (this.props.onSuggestions) {
+					this.props.onSuggestions(this.props.suggestions);
+				}
+				// eslint-disable-next-line
 				this.setState({
-					suggestions: this.onSuggestions(nextProps.suggestions),
+					suggestions: this.onSuggestions(this.props.suggestions),
 				});
 			}
 		}
 
 		checkSomePropChange(
 			this.props,
-			nextProps,
-			['fieldWeights', 'fuzziness', 'queryFormat', 'dataField', 'categoryField'],
+			prevProps,
+			[
+				'fieldWeights',
+				'fuzziness',
+				'queryFormat',
+				'dataField',
+				'categoryField',
+				'nestedField',
+				'searchOperators',
+			],
 			() => {
-				this.updateQuery(nextProps.componentId, this.state.currentValue, nextProps);
+				this.updateQuery(this.state.currentValue, this.props);
 			},
 		);
 
-		if (this.props.defaultSelected !== nextProps.defaultSelected) {
-			this.setValue(nextProps.defaultSelected, true, nextProps);
+		if (!isEqual(this.props.value, prevProps.value)) {
+			const { term: currentValue, category: currentCategory = null } = this.props.value;
+			this.setValue(
+				currentValue,
+				true,
+				this.props,
+				currentCategory,
+				undefined,
+				undefined,
+				false,
+			);
 		} else if (
 			// since, selectedValue will be updated when currentValue changes,
 			// we must only check for the changes introduced by
 			// clear action from SelectedFilters component in which case,
 			// the currentValue will never match the updated selectedValue
-			this.props.selectedValue !== nextProps.selectedValue
-			&& this.state.currentValue !== nextProps.selectedValue
+			this.props.selectedValue !== prevProps.selectedValue
+			&& this.state.currentValue !== this.props.selectedValue
 		) {
-			this.setValue(nextProps.selectedValue || '', true, nextProps);
+			const { value, onChange } = this.props;
+			if (value === undefined) {
+				this.setValue(
+					this.props.selectedValue || '',
+					true,
+					this.props,
+					this.props.selectedCategory,
+				);
+			} else if (onChange) {
+				const currentValue = {
+					term: this.props.selectedValue || '',
+					category: this.props.selectedCategory || null,
+				};
+				// value prop exists
+				onChange(currentValue, () => this.triggerQuery(currentValue));
+			} else {
+				// value prop exists and onChange is not defined:
+				// we need to put the current value back into the store
+				// if the clear action was triggered by interacting with
+				// selected-filters component
+				this.isPending = false;
+				this.setValue(
+					this.state.currentValue,
+					true,
+					this.props,
+					this.state.currentCategory,
+				);
+			}
 		}
 	}
 
-	componentWillUnmount() {
-		this.props.removeComponent(this.props.componentId);
-		this.props.removeComponent(this.internalComponent);
+	componentDidMount() {
+		const {
+			enableQuerySuggestions,
+			renderQuerySuggestions,
+			fetchPopularSuggestions,
+			componentId,
+		} = this.props;
+		// TODO: Remove in 4.0
+		if (enableQuerySuggestions !== undefined) {
+			console.warn(
+				'Warning(ReactiveSearch): The `enableQuerySuggestions` prop has been marked as deprecated, please use the `enablePopularSuggestions` prop instead.',
+			);
+		}
+		// TODO: Remove in 4.0
+		if (renderQuerySuggestions !== undefined) {
+			console.warn(
+				'Warning(ReactiveSearch): The `renderQuerySuggestions` prop has been marked as deprecated, please use the `renderPopularSuggestions` prop instead.',
+			);
+		}
+		fetchPopularSuggestions(componentId);
 	}
 
 	getAggsQuery = field => ({
@@ -142,16 +271,18 @@ class CategorySearch extends Component {
 		},
 	});
 
-	setReact = (props) => {
-		const { react } = props;
-		if (react) {
-			const newReact = pushToAndClause(react, this.internalComponent);
-			props.watchComponent(props.componentId, newReact);
-		} else {
-			props.watchComponent(props.componentId, {
-				and: this.internalComponent,
+	getCombinedAggsQuery = () => {
+		const { categoryField, aggregationField } = this.props;
+		const aggsQuery = this.getAggsQuery(categoryField);
+		if (aggregationField) {
+			const compositeAggsQuery = getCompositeAggsQuery({
+				value: null,
+				props: this.props,
+				showTopHits: true,
 			});
+			aggsQuery.aggs = { ...aggsQuery.aggs, ...compositeAggsQuery.aggs };
 		}
+		return aggsQuery;
 	};
 
 	static highlightQuery = (props) => {
@@ -177,26 +308,38 @@ class CategorySearch extends Component {
 				pre_tags: ['<mark>'],
 				post_tags: ['</mark>'],
 				fields,
+				...(props.highlightField && { require_field_match: false }),
 			},
 		};
 	};
 
 	static defaultQuery = (value, props, category) => {
 		let finalQuery = null;
-		let fields;
+		let fields = [];
 
 		if (value) {
 			if (Array.isArray(props.dataField)) {
 				fields = props.dataField;
-			} else {
+			} else if (props.dataField) {
 				fields = [props.dataField];
 			}
-			finalQuery = {
-				bool: {
-					should: CategorySearch.shouldQuery(value, fields, props),
-					minimum_should_match: '1',
-				},
-			};
+
+			if (props.queryString) {
+				finalQuery = {
+					query_string: CategorySearch.shouldQuery(value, fields, props),
+				};
+			} else if (props.searchOperators) {
+				finalQuery = {
+					simple_query_string: CategorySearch.shouldQuery(value, fields, props),
+				};
+			} else {
+				finalQuery = {
+					bool: {
+						should: CategorySearch.shouldQuery(value, fields, props),
+						minimum_should_match: '1',
+					},
+				};
+			}
 
 			if (category && category !== '*') {
 				finalQuery = [
@@ -211,8 +354,15 @@ class CategorySearch extends Component {
 		}
 
 		if (value === '') {
+			finalQuery = null;
+		}
+
+		if (finalQuery && props.nestedField) {
 			finalQuery = {
-				match_all: {},
+				nested: {
+					path: props.nestedField,
+					query: finalQuery,
+				},
 			};
 		}
 
@@ -220,145 +370,223 @@ class CategorySearch extends Component {
 	};
 
 	static shouldQuery = (value, dataFields, props) => {
-		const fields = dataFields.map((field, index) =>
-			`${field}${
+		const finalQuery = [];
+		const phrasePrefixFields = [];
+		const fields = (dataFields || []).map((field, index) => {
+			const queryField = `${field}${
 				Array.isArray(props.fieldWeights) && props.fieldWeights[index]
 					? `^${props.fieldWeights[index]}`
 					: ''
-			}`);
+			}`;
+			if (
+				!(
+					field.endsWith('.keyword')
+					|| field.endsWith('.autosuggest')
+					|| field.endsWith('.search')
+				)
+			) {
+				phrasePrefixFields.push(queryField);
+			}
+			return queryField;
+		});
+		if (props.searchOperators || props.queryString) {
+			return {
+				query: value,
+				fields,
+				default_operator: props.queryFormat,
+			};
+		}
 
 		if (props.queryFormat === 'and') {
-			return [
-				{
-					multi_match: {
-						query: value,
-						fields,
-						type: 'cross_fields',
-						operator: 'and',
-					},
+			finalQuery.push({
+				multi_match: {
+					query: value,
+					fields,
+					type: 'cross_fields',
+					operator: 'and',
 				},
-				{
+			});
+			finalQuery.push({
+				multi_match: {
+					query: value,
+					fields,
+					type: 'phrase',
+					operator: 'and',
+				},
+			});
+			if (phrasePrefixFields.length > 0) {
+				finalQuery.push({
 					multi_match: {
 						query: value,
-						fields,
+						fields: phrasePrefixFields,
 						type: 'phrase_prefix',
 						operator: 'and',
 					},
-				},
-			];
+				});
+			}
+			return finalQuery;
 		}
 
-		return [
-			{
-				multi_match: {
-					query: value,
-					fields,
-					type: 'best_fields',
-					operator: 'or',
-					fuzziness: props.fuzziness ? props.fuzziness : 0,
-				},
+		finalQuery.push({
+			multi_match: {
+				query: value,
+				fields,
+				type: 'best_fields',
+				operator: 'or',
+				fuzziness: props.fuzziness ? props.fuzziness : 0,
 			},
-			{
+		});
+
+		finalQuery.push({
+			multi_match: {
+				query: value,
+				fields,
+				type: 'phrase',
+				operator: 'or',
+			},
+		});
+
+		if (phrasePrefixFields.length > 0) {
+			finalQuery.push({
 				multi_match: {
 					query: value,
-					fields,
+					fields: phrasePrefixFields,
 					type: 'phrase_prefix',
 					operator: 'or',
 				},
-			},
-		];
+			});
+		}
+		return finalQuery;
 	};
 
-	onSuggestions = (searchSuggestions) => {
-		if (this.props.onSuggestion) {
-			return searchSuggestions.map(suggestion => this.props.onSuggestion(suggestion));
-		}
+	onSuggestions = searchResults =>
+		handleOnSuggestions(searchResults, this.state.currentValue, this.props);
 
-		const fields = Array.isArray(this.props.dataField)
-			? this.props.dataField
-			: [this.props.dataField];
-
-		return getSuggestions(fields, searchSuggestions, this.state.currentValue.toLowerCase());
-	};
-
-	setValue = (value, isDefaultValue = false, props = this.props, category, cause) => {
-		// ignore state updates when component is locked
-		if (props.beforeValueChange && this.locked) {
-			return;
-		}
-
-		this.locked = true;
+	setValue = (
+		value,
+		isDefaultValue = false,
+		props = this.props,
+		category,
+		cause,
+		hasMounted = true,
+		toggleIsOpen = true,
+	) => {
 		const performUpdate = () => {
-			this.setState(
-				{
-					currentValue: value,
-					suggestions: [],
-				},
-				() => {
-					if (isDefaultValue) {
-						if (this.props.autosuggest) {
-							this.setState({
-								isOpen: false,
-							});
-							this.updateQuery(this.internalComponent, value, props);
-						}
-						// in case of strict selection only SUGGESTION_SELECT should be able
-						// to set the query otherwise the value should reset
-						if (props.strictSelection) {
-							if (cause === causes.SUGGESTION_SELECT || value === '') {
-								this.updateQuery(props.componentId, value, props, category);
+			if (hasMounted) {
+				this.setState(
+					{
+						currentValue: value || '',
+						currentCategory: category || null,
+					},
+					() => {
+						if (isDefaultValue) {
+							if (this.props.autosuggest) {
+								if (toggleIsOpen) {
+									this.setState({
+										isOpen: false,
+									});
+								}
+								this.updateDefaultQuery(value, props);
+							}
+							// in case of strict selection only SUGGESTION_SELECT should be able
+							// to set the query otherwise the value should reset
+							if (props.strictSelection) {
+								if (cause === causes.SUGGESTION_SELECT || value === '') {
+									this.updateQuery(value, props, category);
+								} else {
+									this.setValue('', true);
+								}
 							} else {
-								this.setValue('', true);
+								this.updateQuery(value, props, category);
 							}
 						} else {
-							this.updateQuery(props.componentId, value, props, category);
+							// debounce for handling text while typing
+							this.handleTextChange(value);
 						}
-					} else {
-						// debounce for handling text while typing
-						this.handleTextChange(value);
-					}
-					this.locked = false;
-					if (props.onValueChange) props.onValueChange(value);
-				},
-			);
+						if (props.onValueChange) props.onValueChange(value);
+					},
+				);
+			} else {
+				this.updateDefaultQuery(value, props);
+				this.updateQuery(value, props, category);
+				if (props.onValueChange) props.onValueChange(value);
+			}
 		};
 		checkValueChange(props.componentId, value, props.beforeValueChange, performUpdate);
 	};
 
 	handleTextChange = debounce((value) => {
 		if (this.props.autosuggest) {
-			this.updateQuery(this.internalComponent, value, this.props);
+			this.updateDefaultQuery(value, this.props);
 		} else {
-			this.updateQuery(this.props.componentId, value, this.props);
+			this.updateQuery(value, this.props);
 		}
 	}, this.props.debounce);
 
-	updateQuery = (componentId, value, props, category) => {
+	updateDefaultQuery = (value, props, category = this.state.currentCategory) => {
+		const { defaultQuery } = props;
+		let defaultQueryOptions;
+		let query = CategorySearch.defaultQuery(value, props, category);
+		if (defaultQuery) {
+			const defaultQueryTobeSet = defaultQuery(value, props, category) || {};
+			if (defaultQueryTobeSet.query) {
+				({ query } = defaultQueryTobeSet);
+			}
+			defaultQueryOptions = getOptionsFromQuery(defaultQueryTobeSet);
+			// Update calculated default query in store
+			updateDefaultQuery(props.componentId, props, value);
+		}
+		props.setSuggestionsSearchValue(value);
+		const aggsQuery = this.getCombinedAggsQuery();
+		props.setQueryOptions(this.internalComponent, {
+			...this.queryOptions,
+			...aggsQuery,
+			...defaultQueryOptions,
+		});
+		props.updateQuery({
+			componentId: this.internalComponent,
+			query,
+			value,
+			category,
+			componentType: componentTypes.categorySearch,
+		});
+	};
+
+	updateQuery = (value, props, category = this.state.currentCategory) => {
 		const {
-			customQuery, defaultQuery, filterLabel, showFilter, URLParams,
+			customQuery, filterLabel, showFilter, URLParams,
 		} = props;
 
-		// defaultQuery from props is always appended regardless of a customQuery
-		const query = customQuery || CategorySearch.defaultQuery;
-		const queryObject = defaultQuery
-			? {
-				bool: {
-					must: [
-						...query(value, props, category),
-						...defaultQuery(value, props, category),
-					],
-				},
-			} // prettier-ignore
-			: query(value, props, category);
-		props.updateQuery({
-			componentId,
-			query: queryObject,
-			value,
-			label: filterLabel,
-			showFilter,
-			URLParams,
-			componentType: 'CATEGORYSEARCH',
-		});
+		let customQueryOptions;
+		let query = CategorySearch.defaultQuery(value, props, category);
+		if (customQuery) {
+			const customQueryTobeSet = customQuery(value, props, category) || {};
+			if (customQueryTobeSet.query) {
+				({ query } = customQueryTobeSet);
+			}
+			customQueryOptions = getOptionsFromQuery(customQueryTobeSet);
+			updateCustomQuery(props.componentId, props, value);
+		}
+
+		if (!this.isPending) {
+			// execute the query on an uncontrolled component
+			// query options should be applied to the source component,
+			// not on internal component, hence using `this.props.componentId` here
+			props.setQueryOptions(props.componentId, {
+				...this.queryOptions,
+				...customQueryOptions,
+			});
+			props.updateQuery({
+				componentId: props.componentId,
+				query,
+				value,
+				label: filterLabel,
+				showFilter,
+				URLParams,
+				componentType: componentTypes.categorySearch,
+				category,
+			});
+		}
 	};
 
 	handleFocus = (event) => {
@@ -366,62 +594,105 @@ class CategorySearch extends Component {
 			isOpen: true,
 		});
 		if (this.props.onFocus) {
-			this.props.onFocus(event);
+			this.props.onFocus(event, this.triggerQuery);
 		}
 	};
 
 	clearValue = () => {
+		this.isPending = false;
 		this.setValue('', true);
-		this.onValueSelected(null, causes.CLEAR_VALUE);
+		this.onValueSelected(null, causes.CLEAR_VALUE, null);
 	};
 
 	handleKeyDown = (event, highlightedIndex) => {
+		const { value, onChange } = this.props;
+		if (value !== undefined && onChange) {
+			this.isPending = true;
+		}
 		// if a suggestion was selected, delegate the handling to suggestion handler
 		if (event.key === 'Enter' && highlightedIndex === null) {
 			this.setValue(event.target.value, true);
-			this.onValueSelected(event.target.value, causes.ENTER_PRESS);
+			const currentValue = {
+				term: event.target.value,
+				category: null,
+			};
+			this.onValueSelected(currentValue, causes.ENTER_PRESS);
 		}
 		if (this.props.onKeyDown) {
-			this.props.onKeyDown(event);
+			this.props.onKeyDown(event, this.triggerQuery);
 		}
 	};
 
 	onInputChange = (e) => {
-		const { value } = e.target;
+		const { value: inputValue } = e.target;
 		if (!this.state.isOpen) {
 			this.setState({
 				isOpen: true,
 			});
 		}
-		this.setValue(value);
+
+		const { value, onChange } = this.props;
+		if (value === undefined) {
+			this.setValue(inputValue);
+		} else if (onChange) {
+			this.isPending = true;
+			const currentValue = {
+				term: inputValue,
+				// category: null,
+			};
+			// handle caret position in controlled components
+			handleCaretPosition(e);
+			onChange(currentValue, () => this.triggerQuery(currentValue), e);
+		} else {
+			this.setValue(inputValue);
+		}
+	};
+
+	triggerQuery = (value) => {
+		const { term: currentValue, category: currentCategory = null } = value;
+		this.isPending = false;
+		this.setValue(currentValue, true, this.props, currentCategory);
 	};
 
 	onSuggestionSelected = (suggestion) => {
-		this.setValue(
-			suggestion.value,
-			true,
-			this.props,
-			suggestion.category,
-			causes.SUGGESTION_SELECT,
-		);
-		this.onValueSelected(
-			suggestion.value,
-			suggestion.category,
-			causes.SUGGESTION_SELECT,
-			suggestion.source,
-		);
+		const { value, onChange } = this.props;
+		const currentValue = {
+			term: suggestion.value,
+			category: suggestion.category || null,
+		};
+		this.setState({
+			isOpen: false,
+		});
+		if (value === undefined) {
+			this.setValue(
+				currentValue.term,
+				true,
+				this.props,
+				currentValue.category,
+				causes.SUGGESTION_SELECT,
+			);
+		} else if (onChange) {
+			this.isPending = false;
+			onChange(currentValue, () => this.triggerQuery(currentValue));
+		}
+		// Record analytics for selected suggestions
+		this.triggerClickAnalytics(suggestion._click_id);
+		// onValueSelected is user interaction driven:
+		// it should be triggered irrespective of controlled (or)
+		// uncontrolled component behavior
+		this.onValueSelected(currentValue, causes.SUGGESTION_SELECT, suggestion.source);
 	};
 
-	onValueSelected = (currentValue = this.state.currentValue, category = null, ...cause) => {
+	onValueSelected = (selectedValue, cause, source) => {
 		const { onValueSelected } = this.props;
 		if (onValueSelected) {
-			onValueSelected(currentValue, category, ...cause);
+			onValueSelected(selectedValue, cause, source);
 		}
 	};
 
 	handleStateChange = (changes) => {
 		const { isOpen, type } = changes;
-		if (type === Downshift.stateChangeTypes.mouseUp) {
+		if (type === Downshift.stateChangeTypes.mouseUp && isOpen !== undefined) {
 			this.setState({
 				isOpen,
 			});
@@ -434,6 +705,36 @@ class CategorySearch extends Component {
 			return highlightedIndex === index ? '#555' : '#424242';
 		}
 		return highlightedIndex === index ? '#eee' : '#fff';
+	};
+
+	handleSearchIconClick = () => {
+		const { currentValue } = this.state;
+		if (currentValue.trim()) {
+			this.isPending = false;
+			this.setValue(currentValue, true);
+			this.onValueSelected(currentValue, causes.SEARCH_ICON_CLICK);
+		}
+	};
+
+	handleVoiceResults = ({ results }) => {
+		const { autosuggest } = this.props;
+		if (
+			results
+			&& results[0]
+			&& results[0].isFinal
+			&& results[0][0]
+			&& results[0][0].transcript
+			&& results[0][0].transcript.trim()
+		) {
+			this.isPending = false;
+			this.setValue(results[0][0].transcript.trim(), !autosuggest);
+			if (autosuggest) {
+				this._inputRef.focus();
+				this.setState({
+					isOpen: true,
+				});
+			}
+		}
 	};
 
 	renderIcon = () => {
@@ -450,58 +751,197 @@ class CategorySearch extends Component {
 		return null;
 	};
 
-	renderIcons = () => (
-		<div>
-			{this.state.currentValue
-				&& this.props.showClear && (
+	renderIcons = () => {
+		const { currentValue } = this.state;
+		const {
+			showIcon,
+			showClear,
+			renderMic,
+			getMicInstance,
+			showVoiceSearch,
+			iconPosition,
+			innerClass,
+		} = this.props;
+		return (
+			<div>
+				{this.state.currentValue && showClear && (
+					<InputIcon
+						onClick={this.clearValue}
+						iconPosition="right"
+						clearIcon={iconPosition === 'right'}
+						showIcon={showIcon}
+						isClearIcon
+					>
+						{this.renderCancelIcon()}
+					</InputIcon>
+				)}
+				{this.shouldMicRender(showVoiceSearch) && (
+					<Mic
+						getInstance={getMicInstance}
+						render={renderMic}
+						iconPosition={iconPosition}
+						onResult={this.handleVoiceResults}
+						className={getClassName(innerClass, 'mic') || null}
+						applyClearStyle={!!currentValue && showClear}
+						showIcon={showIcon}
+					/>
+				)}
 				<InputIcon
-					onClick={this.clearValue}
-					iconPosition="right"
-					clearIcon={this.props.iconPosition === 'right'}
+					onClick={this.handleSearchIconClick}
+					iconPosition={iconPosition}
+					showIcon={showIcon}
 				>
-					{this.renderCancelIcon()}
+					{this.renderIcon()}
 				</InputIcon>
-			)}
-			<InputIcon iconPosition={this.props.iconPosition}>{this.renderIcon()}</InputIcon>
-		</div>
-	);
+			</div>
+		);
+	};
+
+	shouldMicRender(showVoiceSearch) {
+		// checks for SSR
+		if (typeof window === 'undefined') return false;
+		return showVoiceSearch && (window.webkitSpeechRecognition || window.SpeechRecognition);
+	}
 
 	renderNoSuggestion = (finalSuggestionsList = []) => {
 		const {
 			themePreset,
 			theme,
-			loading,
+			isLoading,
 			renderNoSuggestion,
+			innerClass,
+			renderError,
+			error,
 		} = this.props;
 		const { isOpen, currentValue } = this.state;
-		if (renderNoSuggestion && isOpen && !finalSuggestionsList.length && !loading && currentValue) {
+		if (
+			renderNoSuggestion
+			&& isOpen
+			&& !finalSuggestionsList.length
+			&& !isLoading
+			&& currentValue
+			&& !(renderError && error)
+		) {
 			return (
-				<ul
-					className={`${noSuggestions(
-						themePreset,
-						theme,
-					)} ${getClassName(this.props.innerClass, 'no-suggestion')}`}
+				<SuggestionWrapper
+					innerClass={innerClass}
+					themePreset={themePreset}
+					theme={theme}
+					innerClassName="noSuggestion"
 				>
-					<li>{typeof renderNoSuggestion === 'function' ? renderNoSuggestion(currentValue) : renderNoSuggestion}</li>
-				</ul>
+					{typeof renderNoSuggestion === 'function'
+						? renderNoSuggestion(currentValue)
+						: renderNoSuggestion}
+				</SuggestionWrapper>
 			);
 		}
 		return null;
+	};
+
+	renderLoader = () => {
+		const {
+			loader, isLoading, themePreset, theme, innerClass,
+		} = this.props;
+		const { currentValue } = this.state;
+		if (isLoading && loader && currentValue) {
+			return (
+				<SuggestionWrapper
+					innerClass={innerClass}
+					innerClassName="loader"
+					theme={theme}
+					themePreset={themePreset}
+				>
+					{loader}
+				</SuggestionWrapper>
+			);
+		}
+		return null;
+	};
+
+	renderError = () => {
+		const {
+			error, renderError, themePreset, theme, isLoading, innerClass,
+		} = this.props;
+		const { currentValue } = this.state;
+		if (error && renderError && currentValue && !isLoading) {
+			return (
+				<SuggestionWrapper
+					innerClass={innerClass}
+					innerClassName="error"
+					theme={theme}
+					themePreset={themePreset}
+				>
+					{isFunction(renderError) ? renderError(error) : renderError}
+				</SuggestionWrapper>
+			);
+		}
+		return null;
+	};
+
+	getComponent = (downshiftProps = {}, isQuerySuggestionsRender = false) => {
+		const {
+			error,
+			isLoading,
+			aggregationData,
+			promotedResults,
+			customData,
+			rawData,
+		} = this.props;
+		const { currentValue } = this.state;
+		const data = {
+			error,
+			loading: isLoading,
+			downshiftProps,
+			data: this.parsedSuggestions,
+			promotedData: promotedResults || [],
+			customData: customData || {},
+			rawData,
+			aggregationData: aggregationData || [],
+			value: currentValue,
+			suggestions: this.state.suggestions,
+			rawSuggestions: this.props.suggestions || [],
+			categories: this.filteredCategories,
+			rawCategories: this.props.categories,
+			triggerClickAnalytics: this.triggerClickAnalytics,
+			resultStats: this.stats,
+			// TODO: Remove in v4
+			querySuggestions: this.topSuggestions,
+			popularSuggestions: this.topSuggestions,
+		};
+		if (isQuerySuggestionsRender) {
+			return getPopularSuggestionsComponent(
+				{
+					downshiftProps,
+					data: this.topSuggestions,
+					value: currentValue,
+					loading: isLoading,
+					error,
+				},
+				this.props,
+			);
+		}
+		return getComponent(data, this.props);
+	};
+
+	get stats() {
+		return getResultStats(this.props);
 	}
 
-	render() {
-		let suggestionsList = [];
+	get hasCustomRenderer() {
+		return hasCustomRenderer(this.props);
+	}
+
+	get filteredCategories() {
+		const { categories } = this.props;
+		return categories.filter(category => Boolean(category.key));
+	}
+
+	get parsedSuggestions() {
 		let finalSuggestionsList = [];
-		const {
-			theme,
-			themePreset,
-			renderSuggestions,
-			categories, // defaults to empty array
-		} = this.props;
+		let suggestionsList = [];
 
 		// filter out empty categories
-		const filteredCategories = categories
-			.filter(category => Boolean(category.key));
+		const filteredCategories = this.filteredCategories;
 
 		if (
 			!this.state.currentValue
@@ -543,7 +983,52 @@ class CategorySearch extends Component {
 			}
 			finalSuggestionsList = [...categorySuggestions, ...suggestionsList];
 		}
+		return withClickIds(finalSuggestionsList);
+	}
 
+
+	get topSuggestions() {
+		const {
+			enableQuerySuggestions,
+			enablePopularSuggestions,
+			popularSuggestions,
+			showDistinctSuggestions,
+			defaultPopularSuggestions,
+		} = this.props;
+		const { currentValue } = this.state;
+		return enableQuerySuggestions || enablePopularSuggestions
+			? getTopSuggestions(
+				// use default popular suggestions if value is empty
+				currentValue ? popularSuggestions : defaultPopularSuggestions,
+				currentValue,
+				showDistinctSuggestions,
+			)
+			: [];
+	}
+
+	triggerClickAnalytics = (searchPosition, documentId) => {
+		let docId = documentId;
+		if (!docId) {
+			const hitData = this.parsedSuggestions.find(hit => hit._click_id === searchPosition);
+			if (hitData && hitData.source && hitData.source._id) {
+				docId = hitData.source._id;
+			}
+		}
+		this.props.triggerAnalytics(searchPosition, docId);
+	};
+
+	withTriggerQuery = (func) => {
+		if (func) {
+			return e => func(e, () => this.triggerQuery(this.props.value));
+		}
+		return undefined;
+	};
+
+	render() {
+		const { currentValue } = this.state;
+		const { theme, themePreset, size } = this.props;
+		const finalSuggestionsList = this.parsedSuggestions;
+		const hasSuggestions = finalSuggestionsList.length || this.topSuggestions.length;
 		return (
 			<Container style={this.props.style} className={this.props.className}>
 				{this.props.title && (
@@ -559,15 +1044,24 @@ class CategorySearch extends Component {
 						isOpen={this.state.isOpen}
 						itemToString={i => i}
 						render={({
-							getInputProps, getItemProps, isOpen, highlightedIndex,
+							getRootProps,
+							getInputProps,
+							getItemProps,
+							isOpen,
+							highlightedIndex,
+							setHighlightedIndex,
+							...rest
 						}) => (
-							<div className={suggestionsContainer}>
+							<div {...getRootProps({ css: suggestionsContainer }, { suppressRefError: true })}>
 								<Input
+									ref={(c) => {
+										this._inputRef = c;
+									}}
+									aria-label={this.props.componentId}
 									showClear={this.props.showClear}
 									id={`${this.props.componentId}-input`}
 									showIcon={this.props.showIcon}
 									iconPosition={this.props.iconPosition}
-									innerRef={this.props.innerRef}
 									{...getInputProps({
 										className: getClassName(this.props.innerClass, 'input'),
 										placeholder: this.props.placeholder,
@@ -576,69 +1070,114 @@ class CategorySearch extends Component {
 												? ''
 												: this.state.currentValue,
 										onChange: this.onInputChange,
-										onBlur: this.props.onBlur,
+										onBlur: this.withTriggerQuery(this.props.onBlur),
 										onFocus: this.handleFocus,
-										onKeyPress: this.props.onKeyPress,
+										onKeyPress: this.withTriggerQuery(this.props.onKeyPress),
 										onKeyDown: e => this.handleKeyDown(e, highlightedIndex),
-										onKeyUp: this.props.onKeyUp,
+										onKeyUp: this.withTriggerQuery(this.props.onKeyUp),
+										onClick: () => {
+											// clear highlighted index
+											setHighlightedIndex(null);
+										},
 									})}
 									themePreset={themePreset}
 								/>
 								{this.renderIcons()}
-								{renderSuggestions
-									&& renderSuggestions({
-										currentValue: this.state.currentValue,
-										isOpen,
+								{isOpen && this.renderLoader()}
+								{isOpen && this.renderError()}
+								{this.hasCustomRenderer
+									&& this.getComponent({
+										getInputProps,
 										getItemProps,
+										isOpen,
 										highlightedIndex,
-										suggestions: this.props.suggestions,
-										categories: filteredCategories,
-										parsedSuggestions: suggestionsList,
+										setHighlightedIndex,
+										...rest,
 									})}
-								{!renderSuggestions && isOpen && finalSuggestionsList.length ? (
-									<ul
-										className={`${suggestions(
-											themePreset,
-											theme,
-										)} ${getClassName(this.props.innerClass, 'list')}`}
-									>
-										{finalSuggestionsList.slice(0, 10).map((item, index) => (
-											<li
-												{...getItemProps({ item })}
-												key={`${index + 1}-${item.value}`}
-												style={{
-													backgroundColor: this.getBackgroundColor(
+								{!this.hasCustomRenderer
+									&& isOpen
+									&& hasSuggestions ? (
+										<ul
+											css={suggestions(themePreset, theme)}
+											className={getClassName(this.props.innerClass, 'list')}
+										>
+											{finalSuggestionsList.slice(0, size).map((item, index) => (
+												<li
+													{...getItemProps({ item })}
+													key={`${index + this.topSuggestions.length + 1}-${
+														item.value
+													}`}
+													style={{
+														backgroundColor: this.getBackgroundColor(
+															highlightedIndex,
+															this.topSuggestions.length + index,
+														),
+													}}
+												>
+													<Text primary={!!item.category}>
+														<SuggestionItem
+															currentValue={currentValue}
+															suggestion={item}
+														/>
+													</Text>
+												</li>
+											))}
+											{hasPopularSuggestionsRenderer(this.props)
+												? this.getComponent(
+													{
+														getInputProps,
+														getItemProps,
+														isOpen,
 														highlightedIndex,
-														index,
-													),
-												}}
-											>
-												<Text primary={!!item.category}>{item.label}</Text>
-											</li>
-										))}
-									</ul>
-								) : this.renderNoSuggestion(finalSuggestionsList)}
+														...rest,
+													},
+													true,
+												)
+												: this.topSuggestions.map((sugg, index) => (
+													<li
+														{...getItemProps({ item: sugg })}
+														key={`${index + 1}-${sugg.value}`}
+														style={{
+															backgroundColor: this.getBackgroundColor(
+																highlightedIndex,
+																index,
+															),
+														}}
+													>
+														<SuggestionItem
+															currentValue={currentValue}
+															suggestion={sugg}
+														/>
+													</li>
+												))}
+										</ul>
+									) : (
+										this.renderNoSuggestion(finalSuggestionsList)
+									)}
 							</div>
 						)}
 						{...this.props.downShiftProps}
 					/>
 				) : (
-					<div className={suggestionsContainer}>
+					<div css={suggestionsContainer}>
 						<Input
+							ref={(c) => {
+								this._inputRef = c;
+							}}
+							aria-label={this.props.componentId}
 							className={getClassName(this.props.innerClass, 'input')}
 							placeholder={this.props.placeholder}
 							value={this.state.currentValue ? this.state.currentValue : ''}
 							onChange={this.onInputChange}
-							onBlur={this.props.onBlur}
-							onFocus={this.props.onFocus}
-							onKeyPress={this.props.onKeyPress}
-							onKeyDown={this.props.onKeyDown}
-							onKeyUp={this.props.onKeyUp}
+							onBlur={this.withTriggerQuery(this.props.onBlur)}
+							onFocus={this.withTriggerQuery(this.props.onFocus)}
+							onKeyPress={this.withTriggerQuery(this.props.onKeyPress)}
+							onKeyDown={this.withTriggerQuery(this.props.onKeyDown)}
+							onKeyUp={this.withTriggerQuery(this.props.onKeyUp)}
 							autoFocus={this.props.autoFocus}
 							iconPosition={this.props.iconPosition}
 							showClear={this.props.showClear}
 							showIcon={this.props.showIcon}
-							innerRef={this.props.innerRef}
 							themePreset={themePreset}
 						/>
 						{this.renderIcons()}
@@ -650,19 +1189,37 @@ class CategorySearch extends Component {
 }
 
 CategorySearch.propTypes = {
-	addComponent: types.funcRequired,
-	removeComponent: types.funcRequired,
-	setQueryListener: types.funcRequired,
 	setQueryOptions: types.funcRequired,
 	updateQuery: types.funcRequired,
-	watchComponent: types.funcRequired,
+	setSuggestionsSearchValue: types.funcRequired,
+	fetchPopularSuggestions: types.funcRequired,
+	defaultPopularSuggestions: types.suggestions,
 	options: types.options,
 	categories: types.data,
+	rawData: types.rawData,
+	promotedResults: types.hits,
+	customData: types.title,
 	selectedValue: types.selectedValue,
+	selectedCategory: types.selectedValue,
 	suggestions: types.suggestions,
+	aggregationData: types.aggregationData,
+	isLoading: types.bool,
+	config: types.props,
+	triggerAnalytics: types.funcRequired,
+	setCustomQuery: types.funcRequired,
+	setDefaultQuery: types.funcRequired,
+	time: types.number,
+	setCustomHighlightOptions: types.funcRequired,
+	// eslint-disable-next-line
+	error: types.any,
 	// component props
 	autoFocus: types.bool,
 	autosuggest: types.bool,
+	enableSynonyms: types.bool,
+	enableQuerySuggestions: types.bool,
+	// TODO: Remove in v4
+	enablePopularSuggestions: types.bool,
+	queryString: types.bool,
 	beforeValueChange: types.func,
 	categoryField: types.string,
 	className: types.string,
@@ -670,11 +1227,17 @@ CategorySearch.propTypes = {
 	componentId: types.stringRequired,
 	customHighlight: types.func,
 	customQuery: types.func,
-	dataField: types.dataFieldArray,
+	defaultQuery: types.func,
+	dataField: types.dataFieldValidator,
+	aggregationField: types.string,
+	aggregationSize: types.number,
+	size: types.number,
 	debounce: types.number,
-	defaultSelected: types.string,
+	defaultValue: types.categorySearchValue,
+	value: types.categorySearchValue,
 	defaultSuggestions: types.suggestions,
 	downShiftProps: types.props,
+	excludeFields: types.excludeFields,
 	fieldWeights: types.fieldWeights,
 	filterLabel: types.string,
 	fuzziness: types.fuzziness,
@@ -682,25 +1245,35 @@ CategorySearch.propTypes = {
 	highlightField: types.stringOrArray,
 	icon: types.children,
 	iconPosition: types.iconPosition,
+	includeFields: types.includeFields,
 	innerClass: types.style,
-	innerRef: types.func,
-	loading: types.bool,
+	loader: types.title,
+	nestedField: types.string,
+	onError: types.func,
 	onBlur: types.func,
 	onFocus: types.func,
 	onKeyDown: types.func,
 	onKeyPress: types.func,
 	onKeyUp: types.func,
 	onQueryChange: types.func,
-	onSuggestion: types.func,
+	onSuggestions: types.func,
 	onValueChange: types.func,
+	onChange: types.func,
 	onValueSelected: types.func,
 	placeholder: types.string,
 	queryFormat: types.queryFormatSearch,
+	popularSuggestions: types.hits,
 	react: types.react,
-	renderSuggestions: types.func,
-	renderNoSuggestion: types.children,
+	renderError: types.title,
+	// TODO: Remove in v4
+	renderQuerySuggestions: types.func,
+	renderPopularSuggestions: types.func,
+	parseSuggestion: types.func,
+	renderNoSuggestion: types.title,
 	showClear: types.bool,
 	showFilter: types.bool,
+	showVoiceSearch: types.bool,
+	showDistinctSuggestions: types.bool,
 	showIcon: types.bool,
 	style: types.style,
 	title: types.title,
@@ -708,6 +1281,11 @@ CategorySearch.propTypes = {
 	themePreset: types.themePreset,
 	URLParams: types.bool,
 	strictSelection: types.bool,
+	searchOperators: types.bool,
+	// Mic props
+	getMicInstance: types.func,
+	renderMic: types.func,
+	enablePredictiveSuggestions: types.bool,
 };
 
 CategorySearch.defaultProps = {
@@ -715,7 +1293,11 @@ CategorySearch.defaultProps = {
 	className: null,
 	debounce: 0,
 	downShiftProps: {},
+	enableSynonyms: true,
+	enablePopularSuggestions: false,
+	excludeFields: [],
 	iconPosition: 'left',
+	includeFields: ['*'],
 	placeholder: 'Search',
 	queryFormat: 'or',
 	showClear: false,
@@ -724,7 +1306,17 @@ CategorySearch.defaultProps = {
 	style: {},
 	URLParams: false,
 	strictSelection: false,
+	searchOperators: false,
+	showVoiceSearch: false,
+	showDistinctSuggestions: true,
+	size: 10,
+	defaultPopularSuggestions: [],
+	time: 0,
+	enablePredictiveSuggestions: false,
 };
+
+// Add componentType for SSR
+CategorySearch.componentType = componentTypes.categorySearch;
 
 const mapStateToProps = (state, props) => ({
 	categories:
@@ -732,27 +1324,64 @@ const mapStateToProps = (state, props) => ({
 			&& state.aggregations[props.componentId][props.categoryField]
 			&& state.aggregations[props.componentId][props.categoryField].buckets)
 		|| [],
+	rawData: state.rawData[props.componentId],
 	selectedValue:
 		(state.selectedValues[props.componentId]
 			&& state.selectedValues[props.componentId].value)
 		|| null,
-	loading: state.isLoading[props.componentId],
+	selectedCategory:
+		(state.selectedValues[props.componentId]
+			&& state.selectedValues[props.componentId].category)
+		|| null,
 	suggestions: (state.hits[props.componentId] && state.hits[props.componentId].hits) || [],
+	aggregationData: state.compositeAggregations[props.componentId] || [],
 	themePreset: state.config.themePreset,
+	isLoading: !!state.isLoading[`${props.componentId}_active`],
+	error: state.error[props.componentId],
+	config: state.config,
+	promotedResults: state.promotedResults[props.componentId],
+	customData: state.customData[props.componentId],
+	time: (state.hits[props.componentId] && state.hits[props.componentId].time),
+	total: state.hits[props.componentId] && state.hits[props.componentId].total,
+	hidden: state.hits[props.componentId] && state.hits[props.componentId].hidden,
+	defaultPopularSuggestions: state.defaultPopularSuggestions[props.componentId],
+	popularSuggestions: state.querySuggestions[props.componentId],
 });
 
 const mapDispatchtoProps = dispatch => ({
-	addComponent: (component, name) => dispatch(addComponent(component, name)),
-	removeComponent: component => dispatch(removeComponent(component)),
+	setCustomHighlightOptions: (component, options) =>
+		dispatch(setCustomHighlightOptions(component, options)),
+	setCustomQuery: (component, query) => dispatch(setCustomQuery(component, query)),
+	setDefaultQuery: (component, query) => dispatch(setDefaultQuery(component, query)),
+	setSuggestionsSearchValue: value => dispatch(setSuggestionsSearchValue(value)),
 	setQueryOptions: (component, props, execute) =>
 		dispatch(setQueryOptions(component, props, execute)),
-	setQueryListener: (component, onQueryChange, beforeQueryChange) =>
-		dispatch(setQueryListener(component, onQueryChange, beforeQueryChange)),
 	updateQuery: updateQueryObject => dispatch(updateQuery(updateQueryObject)),
-	watchComponent: (component, react) => dispatch(watchComponent(component, react)),
+	triggerAnalytics: (searchPosition, documentId) =>
+		dispatch(recordSuggestionClick(searchPosition, documentId)),
+	fetchPopularSuggestions: component => dispatch(loadPopularSuggestions(component)),
 });
 
-export default connect(
+const ConnectedComponent = connect(
 	mapStateToProps,
 	mapDispatchtoProps,
-)(withTheme(CategorySearch));
+)(
+	withTheme(props => (
+		<ComponentWrapper
+			{...props}
+			internalComponent
+			componentType={componentTypes.categorySearch}
+		>
+			{() => <CategorySearch ref={props.myForwardedRef} {...props} />}
+		</ComponentWrapper>
+	)),
+);
+
+// eslint-disable-next-line
+const ForwardRefComponent = React.forwardRef((props, ref) => (
+	<ConnectedComponent {...props} myForwardedRef={ref} />
+));
+hoistNonReactStatics(ForwardRefComponent, CategorySearch);
+
+ForwardRefComponent.name = 'CategorySearch';
+export default ForwardRefComponent;

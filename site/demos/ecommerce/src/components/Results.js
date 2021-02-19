@@ -1,44 +1,20 @@
 import React from 'react';
-import { ResultCard } from '@appbaseio/reactivesearch';
-import PropTypes from 'prop-types';
+import { ResultCard, ReactiveList } from '@appbaseio/reactivesearch';
 
 import Flex, { FlexChild } from '../styles/Flex';
 import Topic, { price } from '../styles/Topic';
 
-const onResultStats = (results, time) => (
+const renderResultStats = ({ numberOfResults, time }) => (
 	<Flex justifyContent="flex-end" style={{ marginTop: '0.6rem' }}>
-		{results} results found in {time}ms
+		{numberOfResults} results found in {time}ms
 	</Flex>
 );
 
-const onData = data => ({
-	image:
-		data.vehicleType === 'other' || data.vehicleType === 'unknown'
-			? 'src/images/car.jpg'
-			: `src/images/${data.vehicleType.replace(/ /g, '-')}/${data.color}.jpg`,
-	title: data.name,
-	description: (
-		<div>
-			<div className={price}>${data.price}</div>
-			<Flex justifyContent="space-between" responsive>
-				<FlexChild>{'⭐'.repeat(data.rating)}</FlexChild>
-				<FlexChild>REGD. {data.yearOfRegistration}</FlexChild>
-			</Flex>
-			<Flex style={{ marginTop: 5 }} flexWrap>
-				{data.fuelType && <Topic>{data.fuelType}</Topic>}
-				{data.gearbox && <Topic>{data.gearbox}</Topic>}
-				{data.vehicleType && <Topic>{data.vehicleType}</Topic>}
-			</Flex>
-		</div>
-	),
-});
-
 const Results = () => (
-	<ResultCard
+	<ReactiveList
 		componentId="results"
-		dataField="name"
-		onData={onData}
-		onResultStats={onResultStats}
+		dataField="model"
+		renderResultStats={renderResultStats}
 		react={{
 			and: ['category', 'brand', 'rating', 'vehicle', 'price'],
 		}}
@@ -49,11 +25,31 @@ const Results = () => (
 		}}
 		pagination
 		size={15}
+		render={({ data }) => (
+			<ReactiveList.ResultCardsWrapper>
+				{data.map(item => (
+					<ResultCard key={item._id}>
+						<ResultCard.Image src={item.image} />
+						<ResultCard.Title>{item.model}</ResultCard.Title>
+						<ResultCard.Description>
+							<div>
+								<div className={price}>${item.price}</div>
+								<Flex justifyContent="space-between" responsive>
+									<FlexChild>{'⭐'.repeat(item.rating)}</FlexChild>
+									<FlexChild>REGD. {item.year}</FlexChild>
+								</Flex>
+								<Flex style={{ marginTop: 5 }} flexWrap>
+									{item.fuelType && <Topic>{item.fuelType}</Topic>}
+									{item.gearbox && <Topic>{item.gearbox}</Topic>}
+									{item.vehicleType && <Topic>{item.vehicleType}</Topic>}
+								</Flex>
+							</div>
+						</ResultCard.Description>
+					</ResultCard>
+				))}
+			</ReactiveList.ResultCardsWrapper>
+		)}
 	/>
 );
-
-onData.propTypes = {
-	_source: PropTypes.object // eslint-disable-line
-};
 
 export default Results;

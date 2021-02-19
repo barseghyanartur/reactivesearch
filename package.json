@@ -16,12 +16,14 @@
 		"packages/*",
 		"packages/web/examples/*",
 		"packages/vue/examples/*",
+		"packages/vue/demos/*",
 		"packages/maps/examples/*",
 		"site",
 		"site/demos/*"
 	],
 	"husky": {
 		"hooks": {
+			"commit-msg": "commitlint -E HUSKY_GIT_PARAMS",
 			"pre-commit": "lint-staged"
 		}
 	},
@@ -29,6 +31,7 @@
 		"*.js": "eslint"
 	},
 	"devDependencies": {
+		"@commitlint/cli": "^7.5.2",
 		"babel-eslint": "^9.0.0",
 		"concurrently": "^3.5.1",
 		"eslint": "^4.10.0",
@@ -40,6 +43,8 @@
 		"eslint-plugin-react": "^7.5.1",
 		"husky": "^1.2.0",
 		"lint-staged": "^7.0.0",
+		"nps": "^5.9.5",
+		"nps-utils": "^1.7.0",
 		"prettier": "^1.15.2"
 	}
 }

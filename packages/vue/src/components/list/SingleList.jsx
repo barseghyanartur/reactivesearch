@@ -1,27 +1,26 @@
 import { Actions, helper } from '@appbaseio/reactivecore';
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
 import VueTypes from 'vue-types';
 import Title from '../../styles/Title';
 import Input from '../../styles/Input';
 import Container from '../../styles/Container';
-import { connect } from '../../utils/index';
+import {
+	connect,
+	getComponent,
+	hasCustomRenderer,
+	isEvent,
+	isFunction,
+	updateCustomQuery,
+	updateDefaultQuery,
+	isQueryIdentical,
+} from '../../utils/index';
+import ComponentWrapper from '../basic/ComponentWrapper.jsx';
 import types from '../../utils/vueTypes';
 import { UL, Radio } from '../../styles/FormControlList';
+import { getAggsQuery } from './utils';
 
-const {
-	addComponent,
-	removeComponent,
-	watchComponent,
-	updateQuery,
-	setQueryOptions,
-	setQueryListener
-} = Actions;
-const {
-	getQueryOptions,
-	pushToAndClause,
-	checkValueChange,
-	getAggsOrder,
-	getClassName
-} = helper;
+const { updateQuery, setQueryOptions, setCustomQuery, setDefaultQuery } = Actions;
+const { getQueryOptions, checkValueChange, getClassName, getOptionsFromQuery, isEqual } = helper;
 
 const SingleList = {
 	name: 'SingleList',
@@ -31,12 +30,16 @@ const SingleList = {
 		componentId: types.stringRequired,
 		customQuery: types.func,
 		dataField: types.stringRequired,
-		defaultSelected: types.string,
+		defaultValue: types.string,
+		value: types.value,
+		defaultQuery: types.func,
 		filterLabel: types.string,
 		innerClass: types.style,
 		placeholder: VueTypes.string.def('Search'),
 		react: types.react,
-		renderListItem: types.func,
+		render: types.func,
+		renderItem: types.func,
+		renderNoResults: VueTypes.any,
 		transformData: types.func,
 		selectAllLabel: types.string,
 		showCount: VueTypes.bool.def(true),
@@ -48,7 +51,8 @@ const SingleList = {
 		title: types.title,
 		URLParams: VueTypes.bool.def(false),
 		showMissing: VueTypes.bool.def(false),
-		missingLabel: VueTypes.string.def('N/A')
+		missingLabel: VueTypes.string.def('N/A'),
+		nestedField: types.string,
 	},
 	data() {
 		const props = this.$props;
@@ -58,39 +62,28 @@ const SingleList = {
 				props.options && props.options[props.dataField]
 					? props.options[props.dataField].buckets
 					: [],
-			searchTerm: ''
+			searchTerm: '',
 		};
-		this.locked = false;
 		this.internalComponent = `${props.componentId}__internal`;
 		return this.__state;
 	},
 	created() {
-		const onQueryChange = (...args) => {
-			this.$emit('queryChange', ...args);
-		};
-		this.setQueryListener(this.$props.componentId, onQueryChange, null);
+		// Set custom and default queries in store
+		updateCustomQuery(this.componentId, this.setCustomQuery, this.$props, this.currentValue);
+		updateDefaultQuery(this.componentId, this.setDefaultQuery, this.$props, this.currentValue);
 	},
 	beforeMount() {
-		this.addComponent(this.internalComponent);
-		this.addComponent(this.$props.componentId);
 		this.updateQueryHandlerOptions(this.$props);
-		this.setReact(this.$props);
 
 		if (this.selectedValue) {
 			this.setValue(this.selectedValue);
-		} else if (this.$props.defaultSelected) {
-			this.setValue(this.$props.defaultSelected);
+		} else if (this.$props.value) {
+			this.setValue(this.$props.value);
+		} else if (this.$props.defaultValue) {
+			this.setValue(this.$props.defaultValue);
 		}
 	},
-
-	beforeDestroy() {
-		this.removeComponent(this.$props.componentId);
-		this.removeComponent(this.internalComponent);
-	},
 	watch: {
-		react() {
-			this.setReact(this.$props);
-		},
 		options(newVal) {
 			this.modifiedOptions = newVal[this.$props.dataField]
 				? newVal[this.$props.dataField].buckets
@@ -106,20 +99,39 @@ const SingleList = {
 			this.updateQueryHandlerOptions(this.$props);
 			this.updateQueryHandler(this.$data.currentValue, this.$props);
 		},
-		defaultSelected(newVal) {
+		defaultValue(newVal) {
 			this.setValue(newVal);
+		},
+		value(newVal, oldVal) {
+			if (!isEqual(newVal, oldVal)) {
+				this.setValue(newVal);
+			}
 		},
 		selectedValue(newVal) {
 			if (this.$data.currentValue !== newVal) {
 				this.setValue(newVal || '');
 			}
-		}
+		},
+		defaultQuery(newVal, oldVal) {
+			if (!isQueryIdentical(newVal, oldVal, this.$data.currentValue, this.$props)) {
+				this.updateDefaultQueryHandler(this.$data.currentValue, this.$props);
+			}
+		},
+		customQuery(newVal, oldVal) {
+			if (!isQueryIdentical(newVal, oldVal, this.$data.currentValue, this.$props)) {
+				this.updateQueryHandler(this.componentId, this.$data.currentValue, this.$props);
+			}
+		},
 	},
 	render() {
-		const { selectAllLabel, renderListItem } = this.$props;
-		const renderListItemCalc
-			= this.$scopedSlots.renderListItem || renderListItem;
-		if (this.modifiedOptions.length === 0) {
+		const { selectAllLabel, renderItem, renderError, renderNoResults } = this.$props;
+		const renderItemCalc = this.$scopedSlots.renderItem || renderItem;
+		const renderErrorCalc = this.$scopedSlots.renderError || renderError;
+
+		if (renderErrorCalc && this.error) {
+			return isFunction(renderErrorCalc) ? renderErrorCalc(this.error) : renderErrorCalc;
+		}
+		if (!this.hasCustomRenderer && this.modifiedOptions.length === 0) {
 			return null;
 		}
 
@@ -128,6 +140,19 @@ const SingleList = {
 		if (this.$props.transformData) {
 			itemsToRender = this.$props.transformData(itemsToRender);
 		}
+
+		var filteredItemsToRender = itemsToRender.filter(item => {
+			if (String(item.key).length) {
+				if (this.$props.showSearch && this.$data.searchTerm) {
+					return String(item.key)
+						.toLowerCase()
+						.includes(this.$data.searchTerm.toLowerCase());
+					}
+					return true;
+				}
+				return false;
+			});
+
 		return (
 			<Container class={this.$props.className}>
 				{this.$props.title && (
@@ -136,126 +161,105 @@ const SingleList = {
 					</Title>
 				)}
 				{this.renderSearch()}
-				<UL class={getClassName(this.$props.innerClass, 'list') || ''}>
-					{selectAllLabel ? (
-						<li
-							key={selectAllLabel}
-							class={`${
-								this.$data.currentValue === selectAllLabel ? 'active' : ''
-							}`}
-						>
-							<Radio
-								class={getClassName(this.$props.innerClass, 'radio')}
-								id={`${this.$props.componentId}-${selectAllLabel}`}
-								name={this.$props.componentId}
-								value={selectAllLabel}
-								onClick={this.handleClick}
-								readOnly
-								show={this.$props.showRadio}
-								{...{
-									domProps: {
-										checked: this.$data.currentValue === selectAllLabel
-									}
-								}}
-							/>
-							<label
-								class={getClassName(this.$props.innerClass, 'label') || null}
-								for={`${this.$props.componentId}-${selectAllLabel}`}
-							>
-								{selectAllLabel}
-							</label>
-						</li>
-					) : null}
-					{itemsToRender
-						.filter(item => {
-							if (String(item.key).length) {
-								if (this.$props.showSearch && this.$data.searchTerm) {
-									return String(item.key)
-										.toLowerCase()
-										.includes(this.$data.searchTerm.toLowerCase());
-								}
-
-								return true;
-							}
-
-							return false;
-						})
-						.map(item => (
+				{this.hasCustomRenderer ? (
+					this.getComponent()
+				) : (
+					<UL class={getClassName(this.$props.innerClass, 'list') || ''}>
+						{selectAllLabel ? (
 							<li
-								key={item.key}
+								key={selectAllLabel}
 								class={`${
-									this.$data.currentValue === String(item.key) ? 'active' : ''
+									this.$data.currentValue === selectAllLabel ? 'active' : ''
 								}`}
 							>
 								<Radio
 									class={getClassName(this.$props.innerClass, 'radio')}
-									id={`${this.$props.componentId}-${item.key}`}
+									id={`${this.$props.componentId}-${selectAllLabel}`}
 									name={this.$props.componentId}
-									value={item.key}
-									readOnly
+									value={selectAllLabel}
 									onClick={this.handleClick}
-									type="radio"
+									readOnly
 									show={this.$props.showRadio}
 									{...{
 										domProps: {
-											checked: this.$data.currentValue === String(item.key)
-										}
+											checked: this.$data.currentValue === selectAllLabel,
+										},
 									}}
 								/>
 								<label
 									class={getClassName(this.$props.innerClass, 'label') || null}
-									for={`${this.$props.componentId}-${item.key}`}
+									for={`${this.$props.componentId}-${selectAllLabel}`}
 								>
-									{renderListItemCalc ? (
-										renderListItemCalc({
-											label: item.key,
-											count: item.doc_count
-										})
-									) : (
-										<span>
-											{item.key}
-											{this.$props.showCount && (
-												<span
-													class={
-														getClassName(this.$props.innerClass, 'count')
-														|| null
-													}
-												>
-													&nbsp;(
-													{item.doc_count})
-												</span>
-											)}
-										</span>
-									)}
+									{selectAllLabel}
 								</label>
 							</li>
-						))}
-				</UL>
+						) : null}
+						{(!this.hasCustomRenderer && filteredItemsToRender.length === 0
+						&& !this.isLoading ) ? this.renderNoResult() :
+						filteredItemsToRender
+							.map(item => (
+								<li
+									key={item.key}
+									class={`${
+										this.currentValue === String(item.key) ? 'active' : ''
+									}`}
+								>
+									<Radio
+										class={getClassName(this.$props.innerClass, 'radio')}
+										id={`${this.$props.componentId}-${item.key}`}
+										name={this.$props.componentId}
+										value={item.key}
+										readOnly
+										onClick={this.handleClick}
+										type="radio"
+										show={this.$props.showRadio}
+										{...{
+											domProps: {
+												checked: this.currentValue === String(item.key),
+											},
+										}}
+									/>
+									<label
+										class={
+											getClassName(this.$props.innerClass, 'label') || null
+										}
+										for={`${this.$props.componentId}-${item.key}`}
+									>
+										{renderItemCalc ? (
+											renderItemCalc({
+												label: item.key,
+												count: item.doc_count,
+												isChecked: this.currentValue === String(item.key),
+											})
+										) : (
+											<span>
+												{item.key}
+												{this.$props.showCount && (
+													<span
+														class={
+															getClassName(
+																this.$props.innerClass,
+																'count',
+															) || null
+														}
+													>
+														&nbsp;(
+														{item.doc_count})
+													</span>
+												)}
+											</span>
+										)}
+									</label>
+								</li>
+							))}
+					</UL>
+				)}
 			</Container>
 		);
 	},
 
 	methods: {
-		setReact(props) {
-			const { react } = props;
-
-			if (react) {
-				const newReact = pushToAndClause(react, this.internalComponent);
-				this.watchComponent(props.componentId, newReact);
-			} else {
-				this.watchComponent(props.componentId, {
-					and: this.internalComponent
-				});
-			}
-		},
-
 		setValue(nextValue, props = this.$props) {
-			// ignore state updates when component is locked
-			if (props.beforeValueChange && this.locked) {
-				return;
-			}
-
-			this.locked = true;
 			let value = nextValue;
 
 			if (nextValue === this.$data.currentValue) {
@@ -265,54 +269,72 @@ const SingleList = {
 			const performUpdate = () => {
 				this.currentValue = value;
 				this.updateQueryHandler(value, props);
-				this.locked = false;
 				this.$emit('valueChange', value);
+				this.$emit('value-change', value);
 			};
 
-			checkValueChange(
-				props.componentId,
+			checkValueChange(props.componentId, value, props.beforeValueChange, performUpdate);
+		},
+
+		updateDefaultQueryHandler(value, props) {
+			let defaultQueryOptions;
+			let query = SingleList.defaultQuery(value, props);
+			if (this.defaultQuery) {
+				const defaultQueryToBeSet = this.defaultQuery(value, props) || {};
+				if (defaultQueryToBeSet.query) {
+					({ query } = defaultQueryToBeSet);
+				}
+				defaultQueryOptions = getOptionsFromQuery(defaultQueryToBeSet);
+				// Update calculated default query in store
+				updateDefaultQuery(props.componentId, this.setDefaultQuery, props, value);
+			}
+			this.setQueryOptions(this.internalComponent, defaultQueryOptions);
+			this.updateQuery({
+				componentId: this.internalComponent,
+				query,
 				value,
-				props.beforeValueChange,
-				performUpdate
-			);
+				componentType: componentTypes.singleList,
+			});
 		},
 
 		updateQueryHandler(value, props) {
-			const query = props.customQuery || SingleList.defaultQuery;
+			const { customQuery } = props;
+			let query = SingleList.defaultQuery(value, props);
+			let customQueryOptions;
+			if (customQuery) {
+				({ query } = customQuery(value, props) || {});
+				customQueryOptions = getOptionsFromQuery(customQuery(value, props));
+				updateCustomQuery(props.componentId, this.setCustomQuery, props, value);
+			}
+			this.setQueryOptions(props.componentId, customQueryOptions);
 			this.updateQuery({
 				componentId: props.componentId,
-				query: query(value, props),
+				query,
 				value,
 				label: props.filterLabel,
 				showFilter: props.showFilter,
 				URLParams: props.URLParams,
-				componentType: 'SINGLELIST'
+				componentType: componentTypes.singleList,
 			});
 		},
 
 		generateQueryOptions(props) {
 			const queryOptions = getQueryOptions(props);
-			queryOptions.size = 0;
-			queryOptions.aggs = {
-				[props.dataField]: {
-					terms: {
-						field: props.dataField,
-						size: props.size,
-						order: getAggsOrder(props.sortBy || 'count'),
-						...(props.showMissing
-							? {
-								missing: props.missingLabel
-							  }
-							: {})
-					}
-				}
-			};
-			return queryOptions;
+			return getAggsQuery(queryOptions, props);
 		},
 
 		updateQueryHandlerOptions(props) {
 			const queryOptions = SingleList.generateQueryOptions(props);
-			this.setQueryOptions(this.internalComponent, queryOptions);
+			if (props.defaultQuery) {
+				const value = this.$data.currentValue;
+				const defaultQueryOptions = getOptionsFromQuery(props.defaultQuery(value, props));
+				this.setQueryOptions(this.internalComponent, {
+					...queryOptions,
+					...defaultQueryOptions,
+				});
+			} else {
+				this.setQueryOptions(this.internalComponent, queryOptions);
+			}
 		},
 
 		handleInputChange(e) {
@@ -329,7 +351,7 @@ const SingleList = {
 						value={this.$data.searchTerm}
 						placeholder={this.$props.placeholder}
 						style={{
-							margin: '0 0 8px'
+							margin: '0 0 8px',
 						}}
 						themePreset={this.$props.themePreset}
 					/>
@@ -339,80 +361,133 @@ const SingleList = {
 			return null;
 		},
 
+		getComponent() {
+			const { currentValue, modifiedOptions } = this.$data;
+			const { transformData } = this.$props;
+			let itemsToRender = modifiedOptions;
+			if (transformData) {
+				itemsToRender = transformData(itemsToRender);
+			}
+			const data = {
+				error: this.error,
+				loading: this.isLoading,
+				value: currentValue,
+				data: itemsToRender,
+				rawData: this.rawData,
+				handleChange: this.handleClick,
+			};
+			return getComponent(data, this);
+		},
+
 		handleClick(e) {
-			this.setValue(e.target.value);
-		}
-	}
+			let currentValue = e;
+			if (isEvent(e)) {
+				currentValue = e.target.value;
+			}
+			const { value } = this.$props;
+			if (value === undefined) {
+				this.setValue(currentValue);
+			} else {
+				this.$emit('change', currentValue);
+			}
+		},
+
+		renderNoResult() {
+			const renderNoResults
+				= this.$scopedSlots.renderNoResults || this.$props.renderNoResults;
+			return (
+				<p class={getClassName(this.$props.innerClass, 'noResults') || null}>
+					{isFunction(renderNoResults) ? renderNoResults() : renderNoResults}
+				</p>
+			);
+		},
+	},
+	computed: {
+		hasCustomRenderer() {
+			return hasCustomRenderer(this);
+		},
+	},
 };
 
 SingleList.generateQueryOptions = props => {
 	const queryOptions = getQueryOptions(props);
-	queryOptions.size = 0;
-	queryOptions.aggs = {
-		[props.dataField]: {
-			terms: {
-				field: props.dataField,
-				size: props.size,
-				order: getAggsOrder(props.sortBy || 'count'),
-				...(props.showMissing ? { missing: props.missingLabel } : {})
-			}
-		}
-	};
-	return queryOptions;
+	return getAggsQuery(queryOptions, props);
 };
 SingleList.defaultQuery = (value, props) => {
+	let query = null;
 	if (props.selectAllLabel && props.selectAllLabel === value) {
 		if (props.showMissing) {
-			return { match_all: {} };
+			query = { match_all: {} };
 		}
-		return {
+		query = {
 			exists: {
-				field: props.dataField
-			}
+				field: props.dataField,
+			},
 		};
 	}
 	if (value) {
+		query = {
+			term: {
+				[props.dataField]: value,
+			},
+		};
 		if (props.showMissing && props.missingLabel === value) {
-			return {
+			query = {
 				bool: {
 					must_not: {
-						exists: { field: props.dataField }
-					}
-				}
+						exists: { field: props.dataField },
+					},
+				},
 			};
 		}
+	}
+
+	if (query && props.nestedField) {
 		return {
-			term: {
-				[props.dataField]: value
-			}
+			query: {
+				nested: {
+					path: props.nestedField,
+					query,
+				},
+			},
 		};
 	}
-	return null;
+
+	return query;
 };
 const mapStateToProps = (state, props) => ({
-	options: state.aggregations[props.componentId],
+	options:
+		props.nestedField && state.aggregations[props.componentId]
+			? state.aggregations[props.componentId].reactivesearch_nested
+			: state.aggregations[props.componentId],
+	rawData: state.rawData[props.componentId],
+	isLoading: state.isLoading[props.componentId],
 	selectedValue:
 		(state.selectedValues[props.componentId]
 			&& state.selectedValues[props.componentId].value)
 		|| '',
-	themePreset: state.config.themePreset
+	themePreset: state.config.themePreset,
+	error: state.error[props.componentId],
+	componentProps: state.props[props.componentId],
 });
 
 const mapDispatchtoProps = {
-	addComponent,
-	removeComponent,
 	setQueryOptions,
-	setQueryListener,
 	updateQuery,
-	watchComponent
+	setCustomQuery,
+	setDefaultQuery,
 };
 
-const ListConnected = connect(
-	mapStateToProps,
-	mapDispatchtoProps
-)(SingleList);
+const ListConnected = ComponentWrapper(connect(mapStateToProps, mapDispatchtoProps)(SingleList), {
+	componentType: componentTypes.singleList,
+	internalComponent: true,
+});
 
 SingleList.install = function(Vue) {
 	Vue.component(SingleList.name, ListConnected);
 };
+
+// Add componentType for SSR
+SingleList.componentType = componentTypes.singleList;
+
 export default SingleList;

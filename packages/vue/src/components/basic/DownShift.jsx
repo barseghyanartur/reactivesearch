@@ -9,31 +9,30 @@ export default {
 		'highlightedIndex',
 		'handleChange',
 		'itemToString',
-		'handleMouseup'
+		'handleMouseup',
 	],
 	data: () => ({
 		isMouseDown: false,
 		internal_isOpen: false,
 		internal_inputValue: '',
 		internal_selectedItem: null,
-		internal_highlightedIndex: null
+		internal_highlightedIndex: null,
+		internal_eventsCalled: {},
 	}),
 	computed: {
 		mergedState() {
 			return Object.keys(this.$props).reduce(
 				(state, key) => ({
 					...state,
-					[key]: this.isControlledProp(key)
-						? this.$props[key]
-						: this[`internal_${key}`]
+					[key]: this.isControlledProp(key) ? this.$props[key] : this[`internal_${key}`],
 				}),
-				{}
+				{},
 			);
 		},
 
 		internalItemCount() {
 			return this.items.length;
-		}
+		},
 	},
 
 	mounted() {
@@ -64,7 +63,7 @@ export default {
 					this.reset();
 					if (this.$props.handleMouseup) {
 						this.$props.handleMouseup({
-							isOpen: false
+							isOpen: false,
 						});
 					}
 				}
@@ -79,7 +78,7 @@ export default {
 				this.changeHighlightedIndex(amount);
 			} else {
 				this.setState({
-					isOpen: true
+					isOpen: true,
 				});
 
 				this.setHighlightedIndex();
@@ -94,7 +93,7 @@ export default {
 				this.changeHighlightedIndex(amount);
 			} else {
 				this.setState({
-					isOpen: true
+					isOpen: true,
 				});
 
 				this.setHighlightedIndex();
@@ -131,11 +130,19 @@ export default {
 			if (this.$props.handleChange) {
 				this.$props.handleChange(item);
 			}
+
+			function getInputValue() {
+				if (this.isControlledProp('selectedItem')) {
+					return '';
+				}
+				return typeof item === 'object' ? item.label || '' : item;
+			}
+
 			this.setState({
 				isOpen: false,
 				highlightedIndex: null,
 				selectedItem: item,
-				inputValue: this.isControlledProp('selectedItem') ? '' : item
+				inputValue: getInputValue.call(this),
 			});
 		},
 
@@ -165,7 +172,7 @@ export default {
 
 		setHighlightedIndex(highlightedIndex = null) {
 			this.setState({
-				highlightedIndex
+				highlightedIndex,
 			});
 			const element = document.getElementById(`Downshift${highlightedIndex}`);
 			scrollIntoView(element, this.rootNode);
@@ -178,7 +185,7 @@ export default {
 			this.setState({
 				isOpen: false,
 				highlightedIndex: null,
-				inputValue: selectedItem
+				inputValue: selectedItem,
 			});
 		},
 
@@ -196,7 +203,7 @@ export default {
 			}
 
 			return {
-				id: `Downshift${newIndex}`
+				id: `Downshift${newIndex}`,
 			};
 		},
 
@@ -207,16 +214,28 @@ export default {
 			}
 
 			const vm = this;
-
+			setTimeout(() => {
+				vm.internal_eventsCalled[index] = false;
+			}, 0);
 			return {
 				mouseenter() {
 					vm.setHighlightedIndex(newIndex);
 				},
 
-				click(event) {
+				// for browsers not supporting click event (e.g. firefox android)
+				mousedown(event) {
+					if (vm.internal_eventsCalled[index]) return;
+					vm.internal_eventsCalled[index] = true;
 					event.stopPropagation();
 					vm.selectItemAtIndex(newIndex);
-				}
+				},
+
+				click(event) {
+					if (vm.internal_eventsCalled[index]) return;
+					vm.internal_eventsCalled[index] = true;
+					event.stopPropagation();
+					vm.selectItemAtIndex(newIndex);
+				},
 			};
 		},
 
@@ -224,11 +243,11 @@ export default {
 			const { inputValue } = this.mergedState;
 			if (value !== inputValue) {
 				this.setState({
-					inputValue: value
+					inputValue: value,
 				});
 			}
 			return {
-				value: inputValue
+				value: inputValue,
 			};
 		},
 
@@ -237,7 +256,7 @@ export default {
 				click: event => {
 					this.setState({
 						isOpen: true,
-						inputValue: event.target.value
+						inputValue: event.target.value,
 					});
 					if (onClick) {
 						onClick(event);
@@ -260,23 +279,16 @@ export default {
 					if (onBlur) {
 						onBlur(event);
 					}
-				}
+				},
 			};
 		},
 
-		getInputEvents({
-			onInput,
-			onBlur,
-			onFocus,
-			onKeyPress,
-			onKeyDown,
-			onKeyUp
-		}) {
+		getInputEvents({ onInput, onBlur, onFocus, onKeyPress, onKeyDown, onKeyUp, onClick }) {
 			return {
 				input: event => {
 					this.setState({
 						isOpen: true,
-						inputValue: event.target.value
+						inputValue: event.target.value,
 					});
 					if (onInput) {
 						onInput(event);
@@ -311,7 +323,8 @@ export default {
 					}
 					// TODO: implement isMouseDown
 					// this.reset()
-				}
+				},
+				click: onClick,
 			};
 		},
 
@@ -319,23 +332,20 @@ export default {
 			const {
 				getItemProps,
 				getItemEvents,
-
 				getInputProps,
 				getInputEvents,
-
-				getButtonProps
+				getButtonProps,
+				setHighlightedIndex,
 			} = this;
 
 			return {
 				getItemProps,
 				getItemEvents,
-
 				getInputProps,
 				getInputEvents,
-
 				getButtonProps,
-
-				...this.mergedState
+				setHighlightedIndex,
+				...this.mergedState,
 			};
 		},
 
@@ -345,15 +355,18 @@ export default {
 
 		setState(stateToSet) {
 			// eslint-disable-next-line
-			Object.keys(stateToSet).map(key => {
+			Object.keys(stateToSet).forEach(key => {
 				// eslint-disable-next-line
-				this.isControlledProp(key)
-					? this.$emit(`${key}Change`, stateToSet[key])
-					: (this[`internal_${key}`] = stateToSet[key]);
+				if (this.isControlledProp(key)) {
+					this.$emit(`${key}Change`, stateToSet[key]);
+					this.$emit(`${key}-change`, stateToSet[key]);
+				} else {
+					this[`internal_${key}`] = stateToSet[key];
+				}
 			});
-
 			this.$emit('stateChange', this.mergedState);
-		}
+			this.$emit('state-change', this.mergedState);
+		},
 	},
 
 	render() {
@@ -363,9 +376,9 @@ export default {
 			<div ref="rootNode">
 				{this.$scopedSlots.default
 					&& this.$scopedSlots.default({
-						...this.getHelpersAndState()
+						...this.getHelpersAndState(),
 					})}
 			</div>
 		);
-	}
+	},
 };

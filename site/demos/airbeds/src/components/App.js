@@ -1,6 +1,6 @@
 import React from 'react';
 import { ReactiveBase, DataSearch } from '@appbaseio/reactivesearch';
-import { ReactiveMap } from '@appbaseio/reactivemaps';
+import { ReactiveGoogleMap } from '@appbaseio/reactivemaps';
 
 import { nav, container, rightCol, search, title } from '../styles';
 import Filters from './Filters';
@@ -8,8 +8,9 @@ import Filters from './Filters';
 export default () => (
 	<div className={container}>
 		<ReactiveBase
-			app="housing"
-			credentials="0aL1X5Vts:1ee67be1-9195-4f4b-bd4f-a91cd1b5e4b5"
+			app="airbeds-test-app"
+			url="https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io"
+			enableAppbase
 			type="listing"
 			theme={{
 				colors: {
@@ -31,12 +32,14 @@ export default () => (
 			</nav>
 			<Filters />
 
-			<ReactiveMap
+			<ReactiveGoogleMap
 				componentId="map"
 				dataField="location"
 				defaultZoom={13}
 				pagination
-				onPageChange={() => { window.scrollTo(0, 0); }}
+				onPageChange={() => {
+					window.scrollTo(0, 0);
+				}}
 				style={{
 					width: 'calc(100% - 280px)',
 					height: 'calc(100vh - 52px)',
@@ -44,28 +47,36 @@ export default () => (
 				className={rightCol}
 				showMarkerClusters={false}
 				showSearchAsMove={false}
-				onAllData={(hits, streamHits, loadMore, renderMap, renderPagination) => (
+				renderAllData={(hits, streamHits, loadMore, renderMap, renderPagination) => (
 					<div style={{ display: 'flex' }}>
 						<div className="card-container">
 							{hits.map(data => (
 								<div key={data._id} className="card">
-									<div className="card__image" style={{ backgroundImage: `url(${data.image})` }} alt={data.name} />
+									<div
+										className="card__image"
+										style={{ backgroundImage: `url(${data.image})` }}
+										alt={data.name}
+									/>
 									<div>
 										<h2>{data.name}</h2>
 										<div className="card__price">${data.price}</div>
-										<p className="card__info">{data.room_type} · {data.accommodates} guests</p>
+										<p className="card__info">
+											{data.room_type} · {data.accommodates} guests
+										</p>
 									</div>
 								</div>
 							))}
 							{renderPagination()}
 						</div>
-						<div className="map-container">
-							{renderMap()}
-						</div>
+						<div className="map-container">{renderMap()}</div>
 					</div>
 				)}
-				onData={data => ({
-					label: <span style={{ width: 40, display: 'block', textAlign: 'center' }}>${data.price}</span>,
+				renderData={data => ({
+					label: (
+						<span style={{ width: 40, display: 'block', textAlign: 'center' }}>
+							${data.price}
+						</span>
+					),
 				})}
 				react={{
 					and: ['GuestSensor', 'PriceSensor', 'DateRangeSensor', 'search'],

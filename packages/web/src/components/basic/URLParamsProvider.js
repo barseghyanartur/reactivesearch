@@ -6,13 +6,12 @@ import { isEqual } from '@appbaseio/reactivecore/lib/utils/helper';
 import Base from '../../styles/Base';
 import { connect } from '../../utils';
 
-const URLSearchParams = require('url-search-params');
-
 class URLParamsProvider extends Component {
 	componentDidMount() {
-		this.params = new URLSearchParams(window.location.search);
-		this.currentSelectedState = this.props.selectedValues || {};
+		this.init();
+
 		window.onpopstate = () => {
+			this.init();
 			const activeComponents = Array.from(this.params.keys());
 
 			// remove inactive components from selectedValues
@@ -24,37 +23,73 @@ class URLParamsProvider extends Component {
 
 			// update active components in selectedValues
 			Array.from(this.params.entries()).forEach((item) => {
-				this.props.setValue(item[0], JSON.parse(item[1]));
+				try {
+					const [component, value] = item;
+					const { label, showFilter, URLParams } = this.props.selectedValues[
+						component
+					] || { label: component };
+					this.props.setValue(component, JSON.parse(value), label, showFilter, URLParams);
+				} catch (e) {
+					// Do not set value if JSON parsing fails.
+				}
 			});
 		};
 	}
 
-	componentWillReceiveProps(nextProps) {
-		this.currentSelectedState = nextProps.selectedValues;
-		if (!isEqual(this.props.selectedValues, nextProps.selectedValues)) {
-			this.params = new URLSearchParams(window.location.search);
-			const currentComponents = Object.keys(nextProps.selectedValues);
+	componentDidUpdate(prevProps) {
+		// this ensures the url params change are handled
+		// when the url changes, which enables us to
+		// make `onpopstate` event handler work with history.pushState updates
+		this.checkForURLParamsChange();
+
+		this.currentSelectedState = this.props.selectedValues;
+		if (!isEqual(this.props.selectedValues, prevProps.selectedValues)) {
+			this.searchString = this.props.getSearchParams
+				? this.props.getSearchParams()
+				: window.location.search;
+			this.params = new URLSearchParams(this.searchString);
+			const currentComponents = Object.keys(this.props.selectedValues);
 			const urlComponents = Array.from(this.params.keys());
 
 			currentComponents
-				.filter(component => nextProps.selectedValues[component].URLParams)
+				.filter(component => this.props.selectedValues[component].URLParams)
 				.forEach((component) => {
 					// prevents empty history pollution on initial load
 					if (
 						this.hasValidValue(this.props.selectedValues[component])
-						|| this.hasValidValue(nextProps.selectedValues[component])
+						|| this.hasValidValue(prevProps.selectedValues[component])
 					) {
-						if (nextProps.selectedValues[component].URLParams) {
-							this.setURL(
-								component,
-								this.getValue(nextProps.selectedValues[component].value),
-							);
+						const selectedValues = this.props.selectedValues[component];
+						const prevValues = prevProps.selectedValues[component];
+						if (selectedValues.URLParams) {
+							if (selectedValues.category) {
+								this.setURL(
+									component,
+									this.getValue({
+										category: selectedValues.category,
+										value: selectedValues.value,
+									}),
+								);
+							} else {
+								const currentValue = this.getValue(selectedValues.value);
+								const prevValue = prevValues && this.getValue(prevValues.value);
+
+								/*
+									Push to history only if values are different because setting url on
+									same value will lead to 2 same entries in URL history which would cause
+									repeatation on pressing back button.
+								*/
+
+								if (prevValue !== currentValue) {
+									this.setURL(component, this.getValue(selectedValues.value));
+								}
+							}
 						} else {
 							this.params.delete(component);
 							this.pushToHistory();
 						}
 					} else if (
-						!this.hasValidValue(nextProps.selectedValues[component])
+						!this.hasValidValue(this.props.selectedValues[component])
 						&& urlComponents.includes(component)
 					) {
 						// doesn't have a valid value, but the url has a (stale) valid value set
@@ -79,10 +114,42 @@ class URLParamsProvider extends Component {
 			}
 		}
 
-		if (!isEqual(this.props.headers, nextProps.headers)) {
-			nextProps.setHeaders(nextProps.headers);
+		if (!isEqual(this.props.headers, prevProps.headers)) {
+			this.props.setHeaders(this.props.headers);
 		}
 	}
+
+	init = () => {
+		this.searchString = this.props.getSearchParams
+			? this.props.getSearchParams()
+			: window.location.search;
+		this.params = new URLSearchParams(this.searchString);
+		this.currentSelectedState = this.props.selectedValues || {};
+	};
+
+	checkForURLParamsChange = () => {
+		// we only compare the search string (window.location.search by default)
+		// to see if the route has changed (or) not. This handles the following usecase:
+		// search on homepage -> route changes -> search results page with same search query
+		if (window) {
+			const searchString = this.props.getSearchParams
+				? this.props.getSearchParams()
+				: window.location.search;
+
+			if (searchString !== this.searchString) {
+				let event;
+				if (typeof Event === 'function') {
+					event = new Event('popstate');
+				} else {
+					// Correctly fire popstate event on IE11 to prevent app crash.
+					event = document.createEvent('Event');
+					event.initEvent('popstate', true, true);
+				}
+
+				window.dispatchEvent(event);
+			}
+		}
+	};
 
 	hasValidValue(component) {
 		if (!component) return false;
@@ -96,13 +163,17 @@ class URLParamsProvider extends Component {
 		} else if (value && typeof value === 'object') {
 			// TODO: support for NestedList
 			if (value.location) return value;
+			if (value.category) return value;
 			return value.label || value.key || null;
 		}
 		return value;
 	}
 
 	setURL(component, value) {
-		this.params = new URLSearchParams(window.location.search);
+		this.searchString = this.props.getSearchParams
+			? this.props.getSearchParams()
+			: window.location.search;
+		this.params = new URLSearchParams(this.searchString);
 		if (
 			!value
 			|| (typeof value === 'string' && value.trim() === '')
@@ -120,17 +191,21 @@ class URLParamsProvider extends Component {
 	}
 
 	pushToHistory() {
-		if (window.history.pushState) {
-			const paramsSting = this.params.toString() ? `?${this.params.toString()}` : '';
-			const base = window.location.href.split('?')[0];
-			const newurl = `${base}${paramsSting}`;
-			window.history.pushState({ path: newurl }, '', newurl);
+		const paramsSting = this.params.toString() ? `?${this.params.toString()}` : '';
+		const base = window.location.href.split('?')[0];
+		const newURL = `${base}${paramsSting}`;
+
+		if (this.props.setSearchParams) {
+			this.props.setSearchParams(newURL);
+		} else if (window.history.pushState) {
+			window.history.pushState({ path: newURL }, '', newURL);
 		}
+		this.init();
 	}
 
 	render() {
 		return (
-			<Base style={this.props.style} className={this.props.className}>
+			<Base as={this.props.as} style={this.props.style} className={this.props.className}>
 				{this.props.children}
 			</Base>
 		);
@@ -143,14 +218,18 @@ URLParamsProvider.propTypes = {
 	selectedValues: types.selectedValues,
 	// component props
 	children: types.children,
+	as: types.string,
 	headers: types.headers,
 	style: types.style,
 	className: types.string,
+	getSearchParams: types.func,
+	setSearchParams: types.func,
 };
 
 URLParamsProvider.defaultProps = {
 	style: {},
 	className: null,
+	as: 'div',
 };
 
 const mapStateToProps = state => ({
@@ -163,7 +242,12 @@ const mapDispatchtoProps = dispatch => ({
 		dispatch(setValue(component, value, label, showFilter, URLParams)),
 });
 
-export default connect(
+const ConnectedComponent = connect(
 	mapStateToProps,
 	mapDispatchtoProps,
-)(URLParamsProvider);
+)(props => <URLParamsProvider ref={props.myForwardedRef} {...props} />);
+
+// eslint-disable-next-line
+export default React.forwardRef((props, ref) => (
+	<ConnectedComponent {...props} myForwardedRef={ref} />
+));

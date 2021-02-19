@@ -1,5 +1,5 @@
 import { css } from 'emotion';
-import styled from 'vue-emotion';
+import styled from '@appbaseio/vue-emotion';
 
 const alertBorder = ({ theme }) => css`
 	border: 1px solid ${theme.colors.alertColor};
@@ -82,7 +82,7 @@ const suggestions = (themePreset, theme) => css`
 	margin: 0;
 	padding: 0;
 	list-style: none;
-	max-height: 260px;
+	max-height: 395px;
 	overflow-y: auto;
 
 	&.small {
@@ -97,8 +97,8 @@ const suggestions = (themePreset, theme) => css`
 		user-select: none;
 
 		& > .trim {
-			display: block;
 			display: -webkit-box;
+			display: block;
 			width: 100%;
 			max-height: 2.3rem;
 			line-height: 1.2rem;
@@ -106,6 +106,7 @@ const suggestions = (themePreset, theme) => css`
 			-webkit-box-orient: vertical;
 			overflow: hidden;
 			text-overflow: ellipsis;
+			white-space: nowrap;
 		}
 
 		&:hover,
@@ -124,5 +125,47 @@ const suggestionsContainer = css`
 	}
 `;
 
+const noSuggestions = (themePreset, theme) => css`
+	display: block;
+	width: 100%;
+	border: 1px solid #ccc;
+	background-color: #fff;
+	font-size: 0.9rem;
+	z-index: 3;
+	position: absolute;
+	top: 41px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	max-height: 260px;
+	overflow-y: auto;
+
+	&.small {
+		top: 30px;
+	}
+
+	li {
+		display: flex;
+		justify-content: space-between;
+		padding: 10px;
+		user-select: none;
+
+		& > .trim {
+			display: -webkit-box;
+			display: block;
+			width: 100%;
+			max-height: 2.3rem;
+			line-height: 1.2rem;
+			-webkit-line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+	}
+
+	${themePreset === 'dark' && dark(theme)}
+`;
+
 export default Input;
-export { suggestionsContainer, suggestions, input };
+export { suggestionsContainer, suggestions, input, noSuggestions };

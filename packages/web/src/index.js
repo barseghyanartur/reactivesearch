@@ -1,11 +1,10 @@
+import '@appbaseio/reactivecore/lib/utils/polyfills';
+
 import ReactiveBase from './components/basic/ReactiveBase';
-import TextField from './components/basic/TextField';
 import SelectedFilters from './components/basic/SelectedFilters';
-import ToggleButton from './components/basic/ToggleButton';
 import NumberBox from './components/basic/NumberBox';
-import DataController from './components/basic/DataController';
-import TagCloud from './components/basic/TagCloud';
 import ReactiveComponent from './components/basic/ReactiveComponent';
+import StateProvider from './components/basic/StateProvider';
 
 import DatePicker from './components/date/DatePicker';
 import DateRange from './components/date/DateRange';
@@ -16,6 +15,8 @@ import SingleDropdownList from './components/list/SingleDropdownList';
 import MultiDropdownList from './components/list/MultiDropdownList';
 import SingleDataList from './components/list/SingleDataList';
 import MultiDataList from './components/list/MultiDataList';
+import TagCloud from './components/list/TagCloud';
+import ToggleButton from './components/list/ToggleButton';
 
 import SingleRange from './components/range/SingleRange';
 import MultiRange from './components/range/MultiRange';
@@ -33,23 +34,18 @@ import ReactiveList from './components/result/ReactiveList';
 import ResultCard from './components/result/ResultCard';
 import ResultList from './components/result/ResultList';
 
-import './polyfills';
-
 export {
 	// basic
 	ReactiveBase,
-	TextField,
+	StateProvider,
 	SelectedFilters,
 	ToggleButton,
 	NumberBox,
-	DataController,
 	TagCloud,
 	ReactiveComponent,
-
 	// date
 	DatePicker,
 	DateRange,
-
 	// list
 	SingleList,
 	MultiList,
@@ -57,7 +53,6 @@ export {
 	MultiDropdownList,
 	SingleDataList,
 	MultiDataList,
-
 	// range
 	SingleRange,
 	MultiRange,
@@ -67,11 +62,9 @@ export {
 	DynamicRangeSlider,
 	RangeInput,
 	RatingsFilter,
-
 	// search
 	DataSearch,
 	CategorySearch,
-
 	// result
 	ReactiveList,
 	ResultCard,

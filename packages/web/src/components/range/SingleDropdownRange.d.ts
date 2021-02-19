@@ -7,17 +7,23 @@ export interface SingleDropdownRangeProps extends CommonProps {
 	customQuery?: (...args: any[]) => any;
 	data?: types.data;
 	dataField: string;
-	defaultSelected?: string;
+	defaultValue?: string;
+	value?: string;
 	filterLabel?: string;
 	innerClass?: types.style;
+	nestedField?: string;
 	onValueChange?: (...args: any[]) => any;
+	onChange?: (...args: any[]) => any;
 	placeholder?: string;
+	searchPlaceholder?: string;
 	react?: types.react;
 	showFilter?: boolean;
 	title?: types.title;
 	themePreset?: types.themePreset;
+	renderLabel?: (...args: any[]) => any;
+	includeNullValues?: boolean;
 }
 
-declare const SingleDropdownRange: React.ComponentType<SingleDropdownRangeProps>;
+declare const SingleDropdownRange: React.ComponentClass<SingleDropdownRangeProps>;
 
 export default SingleDropdownRange;

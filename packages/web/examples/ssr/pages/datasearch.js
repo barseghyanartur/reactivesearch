@@ -9,23 +9,23 @@ import BookCard from '../components/BookCard';
 
 const settings = {
 	app: 'good-books-ds',
-	credentials: 'nY6NNTZZ6:27b76b9f-18ea-456c-bc5e-3a5263ebc63d',
+	url: 'https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io',
+	enableAppbase: true,
 };
 
 const dataSearchProps = {
 	dataField: ['original_title', 'original_title.search'],
-	categoryField: 'authors.raw',
 	componentId: 'BookSensor',
-	defaultSelected: 'Harry',
+	defaultValue: 'Harry',
 };
 
 const reactiveListProps = {
 	componentId: 'SearchResult',
-	dataField: 'original_title.raw',
+	dataField: 'original_title',
 	className: 'result-list-container',
 	from: 0,
 	size: 5,
-	onData: data => <BookCard key={data._id} data={data} />,
+	renderItem: data => <BookCard key={data._id} data={data} />,
 	react: {
 		and: ['BookSensor'],
 	},
@@ -38,12 +38,10 @@ export default class Main extends Component {
 				[
 					{
 						...dataSearchProps,
-						type: 'DataSearch',
 						source: DataSearch,
 					},
 					{
 						...reactiveListProps,
-						type: 'ReactiveList',
 						source: ReactiveList,
 					},
 				],

@@ -7,12 +7,16 @@ export interface RangeSliderProps extends CommonProps {
 	customQuery?: (...args: any[]) => any;
 	histogramQuery?: (props: RangeSliderProps) => any;
 	dataField: string;
-	defaultSelected?: types.range;
+	defaultValue?: types.range;
+	value?: types.range;
 	filterLabel?: string;
 	innerClass?: types.style;
 	interval?: number;
+	nestedField?: string;
 	onDrag?: (...args: any[]) => any;
 	onValueChange?: (...args: any[]) => any;
+	onChange?: (...args: any[]) => any;
+	validateRange?: (value: Array<number>) => boolean;
 	range?: types.range;
 	rangeLabels?: types.rangeLabels;
 	react?: types.react;
@@ -21,8 +25,12 @@ export interface RangeSliderProps extends CommonProps {
 	snap?: boolean;
 	stepValue?: number;
 	title?: types.title;
+	showFilter?: boolean;
+	tooltipTrigger?: types.tooltipTrigger;
+	renderTooltipData?: (...args: any[]) => any;
+	includeNullValues?: boolean;
 }
 
-declare const RangeSlider: React.ComponentType<RangeSliderProps>;
+declare const RangeSlider: React.ComponentClass<RangeSliderProps>;
 
 export default RangeSlider;

@@ -1,20 +1,27 @@
 import * as React from 'react';
-import { CommonProps } from '../../';
+import { CommonProps } from '../..';
 import * as types from '../../types';
 
 export interface SingleDropdownList extends CommonProps {
 	beforeValueChange?: (...args: any[]) => any;
 	customQuery?: (...args: any[]) => any;
+	defaultQuery?: (...args: any[]) => any;
 	dataField: string;
 	defaultValue?: string;
 	value?: string;
 	filterLabel?: string;
 	innerClass?: types.style;
+	loader?: types.title;
 	onValueChange?: (...args: any[]) => any;
-	onChange?: (...args: any) => any;
+	onChange?: (...args: any[]) => any;
+	onError?: (...args: any[]) => any;
 	placeholder?: string;
+	searchPlaceholder?: string;
 	react?: types.react;
-	renderListItem?: (...args: any[]) => any;
+	render?: (...args: any[]) => any;
+	renderItem?: (...args: any[]) => any;
+	renderLabel?: (...args: any[]) => any;
+	renderError?: types.title;
 	transformData?: (...args: any[]) => any;
 	selectAllLabel?: string;
 	showCount?: boolean;
@@ -28,8 +35,10 @@ export interface SingleDropdownList extends CommonProps {
 	showLoadMore?: boolean;
 	loadMoreLabel?: types.title;
 	nestedField?: string;
+	renderNoResults?: (...args: any[]) => any;
+	showSearch?: boolean;
 }
 
-declare const SingleDropdownList: React.ComponentType<SingleDropdownList>;
+declare const SingleDropdownList: React.ComponentClass<SingleDropdownList>;
 
 export default SingleDropdownList;

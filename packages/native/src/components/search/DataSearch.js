@@ -223,7 +223,7 @@ class DataSearch extends Component {
 			? this.props.dataField
 			: [this.props.dataField];
 
-		return getSuggestions(fields, results, this.state.currentValue.toLowerCase());
+		return getSuggestions({ fields, suggestions: results, currentValue: this.state.currentValue.toLowerCase() });
 	};
 
 	setValue = (value, isDefaultValue = false, props = this.props) => {
@@ -252,6 +252,11 @@ class DataSearch extends Component {
 			this.updateQuery(this.props.componentId, value, this.props);
 		}
 	}, this.props.debounce);
+
+	handleUserSelection = (value) => {
+		if (this.props.onValueSelected) this.props.onValueSelected(value);
+		this.selectSuggestion(value.label);
+	}
 
 	selectSuggestion = (value) => {
 		this.setState({
@@ -310,7 +315,7 @@ class DataSearch extends Component {
 				keyboardShouldPersistTaps="always"
 				renderRow={item => (
 					<ListItem
-						onPress={() => this.selectSuggestion(item.label)}
+						onPress={() => this.handleUserSelection(item)}
 						{...getInnerKey(this.props.innerProps, 'listItem')}
 					>
 						<Text

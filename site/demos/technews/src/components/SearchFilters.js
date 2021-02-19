@@ -1,9 +1,5 @@
 import React from 'react';
-import {
-	DataSearch,
-	SingleDropdownList,
-	SingleDropdownRange,
-} from '@appbaseio/reactivesearch';
+import { DataSearch, SingleDropdownList, SingleDropdownRange } from '@appbaseio/reactivesearch';
 
 import Flex, { FlexChild } from '../styles/Flex';
 
@@ -15,22 +11,20 @@ const SearchFilters = () => (
 				dataField={['title', 'text']}
 				highlight
 				customHighlight={() => ({
-					highlight: {
-						pre_tags: ['<mark>'],
-						post_tags: ['</mark>'],
-						fields: {
-							text: {},
-							title: {},
-						},
-						number_of_fragments: 0,
+					pre_tags: ['<mark>'],
+					post_tags: ['</mark>'],
+					fields: {
+						text: {},
+						title: {},
 					},
+					number_of_fragments: 0,
 				})}
 			/>
 		</FlexChild>
 		<FlexChild flex={1}>
 			<SingleDropdownList
 				componentId="category"
-				dataField="p_type"
+				dataField="p_type.keyword"
 				placeholder="Select Category"
 				react={{
 					and: 'title',
@@ -40,7 +34,7 @@ const SearchFilters = () => (
 		<FlexChild flex={1}>
 			<SingleDropdownRange
 				componentId="time"
-				dataField="time"
+				dataField="time.keyword"
 				data={[
 					{ start: 'now-6M', end: 'now', label: 'Last 6 months' },
 					{ start: 'now-1y', end: 'now', label: 'Last year' },

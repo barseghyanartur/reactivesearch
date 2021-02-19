@@ -1,20 +1,18 @@
 import React, { Component } from 'react';
-import {
-	addComponent,
-	removeComponent,
-	watchComponent,
-	updateQuery,
-	setQueryListener,
-} from '@appbaseio/reactivecore/lib/actions';
+import { updateQuery, setQueryOptions, setCustomQuery } from '@appbaseio/reactivecore/lib/actions';
+import hoistNonReactStatics from 'hoist-non-react-statics';
 import {
 	isEqual,
 	checkValueChange,
-	checkPropChange,
 	getClassName,
+	getOptionsFromQuery,
 	formatDate,
+	updateCustomQuery,
+	checkSomePropChange,
 } from '@appbaseio/reactivecore/lib/utils/helper';
 import types from '@appbaseio/reactivecore/lib/utils/types';
 import XDate from 'xdate';
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
 import DayPickerInput from 'react-day-picker/DayPickerInput';
 import { withTheme } from 'emotion-theming';
 
@@ -24,56 +22,50 @@ import Flex from '../../styles/Flex';
 import { connect } from '../../utils';
 
 import CancelSvg from '../shared/CancelSvg';
+import ComponentWrapper from '../basic/ComponentWrapper';
 
 class DateRange extends Component {
 	constructor(props) {
 		super(props);
-		this.state = {
-			currentDate: null,
-			dateHovered: null,
-		};
-		this.locked = false;
-		props.setQueryListener(props.componentId, props.onQueryChange, null);
-	}
 
-	componentWillMount() {
-		this.props.addComponent(this.props.componentId);
-		this.setReact(this.props);
-
-		if (this.props.selectedValue) {
-			// parsing string values from selectedValue to date objects for DayPicker
-			// for value as an array from URL
-			if (Array.isArray(this.props.selectedValue)) {
-				this.handleDateChange(
-					{
-						start: new Date(this.props.selectedValue[0]),
-						end: new Date(this.props.selectedValue[1]),
-					},
-					false,
-				);
+		let currentDate = props.defaultValue || props.value || null;
+		if (props.selectedValue) {
+			if (Array.isArray(props.selectedValue)) {
+				currentDate = {
+					start: new XDate(props.selectedValue[0])[0],
+					end: new XDate(props.selectedValue[1])[0],
+				};
 			} else {
-				// for value as an object for SSR
-				const { start, end } = this.props.selectedValue;
-				this.handleDateChange(
-					{
-						start: new Date(start),
-						end: new Date(end),
-					},
-					false,
-				);
+				const { start, end } = props.selectedValue;
+				currentDate = {
+					start: new XDate(start)[0],
+					end: new XDate(end)[0],
+				};
 			}
-		} else if (this.props.defaultSelected) {
-			this.handleDateChange(this.props.defaultSelected, false);
+		}
+
+		this.state = {
+			currentDate,
+			dateHovered: null,
+			startKey: 'on-start',
+			endKey: 'on-end',
+		};
+		const hasMounted = false;
+
+		// Set custom query in store
+		updateCustomQuery(props.componentId, props, this.state.currentDate);
+
+		if (currentDate) {
+			this.handleDateChange(currentDate, false, props, hasMounted);
 		}
 	}
 
-	componentWillReceiveProps(nextProps) {
-		checkPropChange(this.props.react, nextProps.react, () => this.setReact(nextProps));
-		if (!isEqual(this.props.defaultSelected, nextProps.defaultSelected)) {
-			this.handleDateChange(nextProps.defaultSelected, false, nextProps);
+	componentDidUpdate(prevProps) {
+		if (!isEqual(JSON.stringify(this.props.value), JSON.stringify(prevProps.value))) {
+			this.handleDateChange(this.props.value, false, this.props);
 		} else {
 			const { currentDate } = this.state;
-			const { selectedValue } = nextProps;
+			const { selectedValue, value, onChange } = this.props;
 			// comparing array format of selectedValue with object form of the state if not null
 			if (
 				!isEqual(
@@ -85,41 +77,37 @@ class DateRange extends Component {
 						: null,
 					selectedValue,
 				)
-				&& !isEqual(this.props.selectedValue, selectedValue)
+				&& !isEqual(prevProps.selectedValue, selectedValue)
 			) {
-				this.handleDateChange(
-					selectedValue
-						? {
-							start: nextProps.selectedValue[0],
-							end: nextProps.selectedValue[1],
-						} // prettier-ignore
-						: null,
-					true,
-					nextProps,
-				);
+				const modDate = selectedValue
+					? {
+						start: this.props.selectedValue[0] || '',
+						end: this.props.selectedValue[1] || '',
+					} // prettier-ignore
+					: { start: '', end: '' };
+				if (
+					(value === undefined || (value && value.start === '' && value.end === ''))
+					&& !onChange
+				) {
+					this.handleDateChange(modDate, true, this.props);
+				} else if (onChange) {
+					onChange(modDate);
+				}
 			}
 		}
-		checkPropChange(this.props.dataField, nextProps.dataField, () =>
+
+		checkSomePropChange(this.props, prevProps, ['dataField', 'nestedField'], () =>
 			this.updateQuery(
 				this.state.currentDate
 					? {
 						// we need the date in correct queryFormat
-						start: formatDate(this.state.currentDate.start),
-						end: formatDate(this.state.currentDate.end),
+						start: formatDate(this.state.currentDate.start, this.props),
+						end: formatDate(this.state.currentDate.end, this.props),
 					} // prettier-ignore
 					: this.state.currentDate,
-				nextProps,
-			));
-	}
-
-	componentWillUnmount() {
-		this.props.removeComponent(this.props.componentId);
-	}
-
-	setReact(props) {
-		if (props.react) {
-			props.watchComponent(props.componentId, props.react);
-		}
+				this.props,
+			),
+		);
 	}
 
 	formatInputDate = (date) => {
@@ -127,7 +115,7 @@ class DateRange extends Component {
 		return xdate.valid() ? xdate.toString('yyyy-MM-dd') : '';
 	};
 
-	defaultQuery = (value, props) => {
+	static defaultQuery = (value, props) => {
 		let query = null;
 		if (value) {
 			if (Array.isArray(props.dataField) && props.dataField.length === 2) {
@@ -171,6 +159,16 @@ class DateRange extends Component {
 				};
 			}
 		}
+
+		if (query && props.nestedField) {
+			return {
+				nested: {
+					path: props.nestedField,
+					query,
+				},
+			};
+		}
+
 		return query;
 	};
 
@@ -178,38 +176,125 @@ class DateRange extends Component {
 		this.endDateRef = ref;
 	};
 
+	getStartDateRef = (ref) => {
+		this.startDateRef = ref;
+	};
+
 	clearDayPickerStart = () => {
 		if (this.state.currentDate && this.state.currentDate.start !== '') {
-			this.handleStartDate('', false); // resets the day picker component
+			const { value, onChange } = this.props;
+
+			if (value === undefined && !onChange) {
+				this.handleStartDate('', false); // resets the day picker component
+			} else if (onChange) {
+				onChange({ start: '', end: this.state.currentDate.end });
+			} else {
+				// Since value prop is defined and onChange is not define
+				// we keep the same date as in store
+				this.setState({
+					currentDate: this.state.currentDate,
+				});
+			}
 		}
 	};
 
 	clearDayPickerEnd = () => {
 		if (this.state.currentDate && this.state.currentDate.end !== '') {
 			this.handleEndDate(''); // resets the day picker component
+			const { value, onChange } = this.props;
+
+			if (value === undefined && !onChange) {
+				this.handleEndDate('', false); // resets the day picker component
+			} else if (onChange) {
+				onChange({ start: this.state.currentDate.start, end: '' });
+			} else {
+				// Since value prop is defined and onChange is not define
+				// we keep the same date as in store
+				this.setState({
+					currentDate: this.state.currentDate,
+				});
+			}
 		}
 	};
 
 	handleStartDate = (date, autoFocus = true) => {
 		const { currentDate } = this.state;
 		const end = currentDate ? currentDate.end : '';
-		this.handleDateChange({
-			start: date,
-			end,
-		});
-		// focus the end date DayPicker if its empty
-		if (this.props.autoFocusEnd && autoFocus) {
-			// TODO: replace with a single date component in v2.1.0
-			window.setTimeout(() => this.endDateRef.getInput().focus(), 0);
+		const { value, onChange } = this.props;
+		if ((value === undefined || (value && value.start === '')) && !onChange) {
+			if (this.startDateRef.getInput().value.length === 10) {
+				this.handleDateChange({
+					start: date,
+					end,
+				});
+				this.setState(state => ({
+					startKey: state.startKey === 'on-start' ? 'off-start' : 'on-start',
+				}));
+				// focus the end date DayPicker if its empty
+				if (this.props.autoFocusEnd && autoFocus) {
+					this.endDateRef.getInput().focus();
+				}
+			}
+		} else if (onChange) {
+			if (this.startDateRef.getInput().value.length === 10) {
+				onChange({
+					start: date,
+					end,
+				});
+				// focus the end date DayPicker if its empty
+				if (this.props.autoFocusEnd && autoFocus) {
+					this.endDateRef.getInput().focus();
+				}
+				// this will trigger a remount on the date component
+				// since DayPickerInput doesn't respect the controlled behavior setting on its own
+				this.setState(state => ({
+					startKey: state.startKey === 'on-start' ? 'off-start' : 'on-start',
+				}));
+			}
+		} else {
+			// this will trigger a remount on the date component
+			// since DayPickerInput doesn't respect the controlled behavior setting on its own
+			this.setState(state => ({
+				startKey: state.startKey === 'on-start' ? 'off-start' : 'on-start',
+			}));
 		}
 	};
 
-	handleEndDate = (date) => {
+	handleEndDate = (selectedDay) => {
 		const { currentDate } = this.state;
-		this.handleDateChange({
-			start: currentDate ? currentDate.start : '',
-			end: date,
-		});
+		const { value, onChange } = this.props;
+		const start = currentDate ? currentDate.start : '';
+
+		if ((value === undefined || (value && value.end === '')) && !onChange) {
+			if (this.endDateRef.getInput().value.length === 10) {
+				this.handleDayMouseEnter(selectedDay);
+				this.handleDateChange({
+					start: currentDate ? currentDate.start : '',
+					end: selectedDay,
+				});
+				this.setState(state => ({
+					endKey: state.endKey === 'on-end' ? 'off-end' : 'on-end',
+				}));
+			}
+		} else if (onChange) {
+			if (this.endDateRef.getInput().value.length === 10) {
+				onChange({
+					start,
+					end: selectedDay,
+				});
+			}
+			// this will trigger a remount on the date component
+			// since DayPickerInput doesn't respect the controlled behavior setting on its own
+			this.setState(state => ({
+				endKey: state.endKey === 'on-end' ? 'off-end' : 'on-end',
+			}));
+		} else {
+			// this will trigger a remount on the date component
+			// since DayPickerInput doesn't respect the controlled behavior setting on its own
+			this.setState(state => ({
+				endKey: state.endKey === 'on-end' ? 'off-end' : 'on-end',
+			}));
+		}
 	};
 
 	handleDayMouseEnter = (day) => {
@@ -218,13 +303,12 @@ class DateRange extends Component {
 		});
 	};
 
-	handleDateChange = (currentDate, isDefaultValue = false, props = this.props) => {
-		// ignore state updates when component is locked
-		if (props.beforeValueChange && this.locked) {
-			return;
-		}
-
-		this.locked = true;
+	handleDateChange = (
+		currentDate,
+		isDefaultValue = false,
+		props = this.props,
+		hasMounted = true,
+	) => {
 		let value = null;
 		if (currentDate && !(currentDate.start === '' && currentDate.end === '')) {
 			value = isDefaultValue
@@ -236,32 +320,45 @@ class DateRange extends Component {
 		}
 
 		const performUpdate = () => {
-			this.setState(
-				{
-					currentDate,
-				},
-				() => {
-					this.updateQuery(value, props);
-					this.locked = false;
-					if (props.onValueChange) props.onValueChange(value);
-				},
-			);
+			const handleUpdates = () => {
+				this.updateQuery(value, props);
+				if (props.onValueChange) props.onValueChange(value);
+			};
+
+			if (hasMounted) {
+				this.setState(
+					{
+						currentDate,
+					},
+					handleUpdates,
+				);
+			} else {
+				handleUpdates();
+			}
 		};
 		checkValueChange(props.componentId, value, props.beforeValueChange, performUpdate);
 	};
 
 	updateQuery = (value, props) => {
 		if (!value || (value && value.start.length && value.end.length)) {
-			const query = props.customQuery || this.defaultQuery;
-
+			const { customQuery } = props;
+			let query = DateRange.defaultQuery(value, props);
+			let customQueryOptions;
+			if (customQuery) {
+				const customQueryObject = customQuery(value, props);
+				query = customQueryObject && customQueryObject.query;
+				customQueryOptions = getOptionsFromQuery(customQuery(value, props));
+				updateCustomQuery(props.componentId, props, value);
+			}
+			props.setQueryOptions(props.componentId, customQueryOptions);
 			props.updateQuery({
 				componentId: props.componentId,
-				query: query(value, props),
+				query,
 				value: value ? [value.start, value.end] : null,
 				showFilter: props.showFilter,
 				label: props.filterLabel,
 				URLParams: props.URLParams,
-				componentType: 'DATERANGE',
+				componentType: componentTypes.dateRange,
 			});
 		}
 	};
@@ -270,7 +367,7 @@ class DateRange extends Component {
 		const { currentDate, dateHovered } = this.state;
 		const start = currentDate ? currentDate.start : '';
 		const end = currentDate ? currentDate.end : '';
-		const endDay = dateHovered || '';
+		const endDay = currentDate ? dateHovered : '';
 		const selectedDays = [start, { from: start, to: endDay }];
 		const modifiers = { start, end: endDay };
 		return (
@@ -295,9 +392,11 @@ class DateRange extends Component {
 						}}
 					>
 						<DayPickerInput
+							ref={this.getStartDateRef}
 							showOverlay={this.props.focused}
 							formatDate={this.formatInputDate}
 							value={start}
+							key={this.state.startKey}
 							placeholder={this.props.placeholder.start}
 							dayPickerProps={{
 								numberOfMonths: this.props.numberOfMonths,
@@ -308,10 +407,10 @@ class DateRange extends Component {
 								selectedDays,
 								modifiers,
 							}}
-							onDayChange={this.handleStartDate}
 							inputProps={{
-								readOnly: true,
+								'aria-label': `${this.props.componentId}-start-input`,
 							}}
+							onDayChange={this.handleStartDate}
 							classNames={{
 								container:
 									getClassName(this.props.innerClass, 'daypicker-container')
@@ -349,6 +448,7 @@ class DateRange extends Component {
 							showOverlay={this.props.focused}
 							formatDate={this.formatInputDate}
 							value={end}
+							key={this.state.endKey}
 							placeholder={this.props.placeholder.end}
 							dayPickerProps={{
 								numberOfMonths: this.props.numberOfMonths,
@@ -362,10 +462,10 @@ class DateRange extends Component {
 								selectedDays,
 								modifiers,
 							}}
-							onDayChange={this.handleEndDate}
 							inputProps={{
-								readOnly: true,
+								'aria-label': `${this.props.componentId}-end-input`,
 							}}
+							onDayChange={this.handleEndDate}
 							classNames={{
 								container:
 									getClassName(this.props.innerClass, 'daypicker-container')
@@ -394,27 +494,31 @@ class DateRange extends Component {
 }
 
 DateRange.propTypes = {
-	addComponent: types.funcRequired,
-	removeComponent: types.funcRequired,
-	setQueryListener: types.funcRequired,
 	updateQuery: types.funcRequired,
-	watchComponent: types.funcRequired,
 	selectedValue: types.selectedValue,
+	setQueryOptions: types.funcRequired,
+	setCustomQuery: types.funcRequired,
 	// component props
 	autoFocusEnd: types.bool,
+	beforeValueChange: types.func,
 	className: types.string,
 	componentId: types.stringRequired,
 	dataField: types.dataFieldArray,
 	dayPickerInputProps: types.props,
-	defaultSelected: types.dateObject,
+	defaultValue: types.dateObject,
+	value: types.dateObject,
 	filterLabel: types.string,
 	focused: types.bool,
 	initialMonth: types.dateObject,
 	innerClass: types.style,
 	numberOfMonths: types.number,
 	onQueryChange: types.func,
+	onValueChange: types.func,
+	onChange: types.func,
 	placeholder: types.rangeLabels,
+	nestedField: types.string,
 	queryFormat: types.queryFormatDate,
+	parseDate: types.func,
 	react: types.react,
 	showClear: types.bool,
 	showFilter: types.bool,
@@ -432,7 +536,11 @@ DateRange.defaultProps = {
 	},
 	showClear: true,
 	showFilter: true,
+	queryFormat: 'epoch_millis',
 };
+
+// Add componentType for SSR
+DateRange.componentType = componentTypes.dateRange;
 
 const mapStateToProps = (state, props) => ({
 	selectedValue: state.selectedValues[props.componentId]
@@ -441,15 +549,27 @@ const mapStateToProps = (state, props) => ({
 });
 
 const mapDispatchtoProps = dispatch => ({
-	addComponent: component => dispatch(addComponent(component)),
-	removeComponent: component => dispatch(removeComponent(component)),
+	setCustomQuery: (component, query) => dispatch(setCustomQuery(component, query)),
 	updateQuery: updateQueryObject => dispatch(updateQuery(updateQueryObject)),
-	watchComponent: (component, react) => dispatch(watchComponent(component, react)),
-	setQueryListener: (component, onQueryChange, beforeQueryChange) =>
-		dispatch(setQueryListener(component, onQueryChange, beforeQueryChange)),
+	setQueryOptions: (component, props) => dispatch(setQueryOptions(component, props)),
 });
 
-export default connect(
+const ConnectedComponent = connect(
 	mapStateToProps,
 	mapDispatchtoProps,
-)(withTheme(DateRange));
+)(
+	withTheme(props => (
+		<ComponentWrapper {...props} componentType={componentTypes.dateRange}>
+			{() => <DateRange ref={props.myForwardedRef} {...props} />}
+		</ComponentWrapper>
+	)),
+);
+
+// eslint-disable-next-line
+const ForwardRefComponent = React.forwardRef((props, ref) => (
+	<ConnectedComponent {...props} myForwardedRef={ref} />
+));
+hoistNonReactStatics(ForwardRefComponent, DateRange);
+
+ForwardRefComponent.name = 'DateRange';
+export default ForwardRefComponent;

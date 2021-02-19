@@ -1,5 +1,5 @@
-import { css } from 'emotion';
-import styled from 'react-emotion';
+import { css } from '@emotion/core';
+import styled from '@emotion/styled';
 import { lighten } from 'polished';
 
 import Title from './Title';
@@ -56,7 +56,7 @@ const ListItem = styled('a')`
 			: '#fdfefd')};
 	}
 
-	&:last-child {
+	&:last-of-type {
 		border: 0;
 	}
 

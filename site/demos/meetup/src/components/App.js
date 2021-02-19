@@ -1,16 +1,17 @@
 import React from 'react';
 import { ReactiveBase, DataSearch } from '@appbaseio/reactivesearch';
-import { GeoDistanceDropdown, ReactiveMap } from '@appbaseio/reactivemaps';
+import { GeoDistanceDropdown, ReactiveGoogleMap } from '@appbaseio/reactivemaps';
 
 import { header, filters, listContainer, mapContainer } from '../styles';
 
 export default () => (
 	<div>
 		<ReactiveBase
-			app="reactivemap_demo"
-			credentials="y4pVxY2Ok:c92481e2-c07f-4473-8326-082919282c18"
+			app="meetup_dataset"
+			url="https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io"
+			enableAppbase
 			type="meetupdata1"
-			mapKey="AIzaSyBQdVcKCe0q_vOBDUvJYpzwGpt_d_uTj4Q"
+			mapKey="AIzaSyAKz3UhgSuP872fb-Aw27oPRI7M0eXkA9U"
 			theme={{
 				typography: {
 					fontFamily: 'Varela Round',
@@ -54,7 +55,7 @@ export default () => (
 				</div>
 			</div>
 
-			<ReactiveMap
+			<ReactiveGoogleMap
 				componentId="map"
 				dataField="location"
 				defaultZoom={13}
@@ -69,26 +70,31 @@ export default () => (
 					top: '168px',
 				}}
 				showMarkerClusters={false}
-				onAllData={(hits, streamHits, loadMore, renderMap, renderPagination) => (
+				renderAllData={(hits, streamHits, loadMore, renderMap, renderPagination) => (
 					<div style={{ display: 'flex' }}>
 						<div id="list" className={listContainer}>
 							{hits.map(data => (
 								<div key={data._id} className="user">
-									<div className="user__image" style={{ backgroundImage: `url(${data.member.photo})` }} alt={data.name} />
+									<div
+										className="user__image"
+										style={{ backgroundImage: `url(${data.member.photo})` }}
+										alt={data.name}
+									/>
 									<div className="user__info">
-										<h3>{data.member.member_name} is going to {data.event.event_name}</h3>
+										<h3>
+											{data.member.member_name} is going to{' '}
+											{data.event.event_name}
+										</h3>
 										<p>{data.venue_name_ngrams}</p>
 									</div>
 								</div>
 							))}
 							{renderPagination()}
 						</div>
-						<div className={mapContainer}>
-							{renderMap()}
-						</div>
+						<div className={mapContainer}>{renderMap()}</div>
 					</div>
 				)}
-				onData={data => ({
+				renderData={data => ({
 					label: (
 						<span
 							style={{

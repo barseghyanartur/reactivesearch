@@ -1,70 +1,64 @@
 import React, { Component } from 'react';
 
-import {
-	addComponent,
-	removeComponent,
-	watchComponent,
-	updateQuery,
-	setQueryListener,
-} from '@appbaseio/reactivecore/lib/actions';
+import { updateQuery, setQueryOptions, setCustomQuery } from '@appbaseio/reactivecore/lib/actions';
+import hoistNonReactStatics from 'hoist-non-react-statics';
 import {
 	isEqual,
 	checkValueChange,
-	checkPropChange,
+	checkSomePropChange,
 	getClassName,
+	updateCustomQuery,
+	getOptionsFromQuery,
 } from '@appbaseio/reactivecore/lib/utils/helper';
 
 import types from '@appbaseio/reactivecore/lib/utils/types';
-
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
 import Title from '../../styles/Title';
 import Container from '../../styles/Container';
 import { UL, Radio } from '../../styles/FormControlList';
-import { connect } from '../../utils';
+import { connect, getRangeQueryWithNullValues } from '../../utils';
+import ComponentWrapper from '../basic/ComponentWrapper';
 
 class SingleRange extends Component {
 	constructor(props) {
 		super(props);
 
+		const defaultValue = props.defaultValue || props.value;
+		const value = props.selectedValue || defaultValue || null;
+		const currentValue = SingleRange.parseValue(value, props);
+
 		this.state = {
-			currentValue: null,
+			currentValue,
 		};
 		this.type = 'range';
-		this.locked = false;
-		props.setQueryListener(props.componentId, props.onQueryChange, null);
-	}
+		// Set custom query in store
+		updateCustomQuery(props.componentId, props, currentValue);
+		const hasMounted = false;
 
-	componentWillMount() {
-		this.props.addComponent(this.props.componentId);
-		this.setReact(this.props);
-
-		if (this.props.selectedValue) {
-			this.setValue(this.props.selectedValue);
-		} else if (this.props.defaultSelected) {
-			this.setValue(this.props.defaultSelected);
+		if (currentValue) {
+			this.setValue(currentValue, props, hasMounted);
 		}
 	}
 
-	componentWillReceiveProps(nextProps) {
-		checkPropChange(this.props.react, nextProps.react, () => this.setReact(nextProps));
-
-		checkPropChange(this.props.dataField, nextProps.dataField, () => {
-			this.updateQuery(this.state.currentValue, nextProps);
+	componentDidUpdate(prevProps) {
+		checkSomePropChange(this.props, prevProps, ['dataField', 'nestedField'], () => {
+			this.updateQuery(this.state.currentValue, this.props);
 		});
 
-		if (!isEqual(this.props.defaultSelected, nextProps.defaultSelected)) {
-			this.setValue(nextProps.defaultSelected);
-		} else if (!isEqual(this.state.currentValue, nextProps.selectedValue)) {
-			this.setValue(nextProps.selectedValue);
-		}
-	}
-
-	componentWillUnmount() {
-		this.props.removeComponent(this.props.componentId);
-	}
-
-	setReact(props) {
-		if (props.react) {
-			props.watchComponent(props.componentId, props.react);
+		if (!isEqual(this.props.value, prevProps.value)) {
+			this.setValue(this.props.value);
+		} else if (
+			!isEqual(this.state.currentValue, this.props.selectedValue)
+			&& !isEqual(this.props.selectedValue, prevProps.selectedValue)
+		) {
+			const { value, onChange } = this.props;
+			if (value === undefined) {
+				this.setValue(this.props.selectedValue || null);
+			} else if (onChange) {
+				onChange(this.props.selectedValue || null);
+			} else {
+				this.setValue(this.state.currentValue);
+			}
 		}
 	}
 
@@ -72,61 +66,79 @@ class SingleRange extends Component {
 	static parseValue = (value, props) => props.data.find(item => item.label === value) || null;
 
 	static defaultQuery = (value, props) => {
+		let query = null;
 		if (value) {
+			query = getRangeQueryWithNullValues([value.start, value.end], props);
+		}
+
+		if (query && props.nestedField) {
 			return {
-				range: {
-					[props.dataField]: {
-						gte: value.start,
-						lte: value.end,
-						boost: 2.0,
-					},
+				nested: {
+					path: props.nestedField,
+					query,
 				},
 			};
 		}
-		return null;
+
+		return query;
 	};
 
-	setValue = (value, props = this.props) => {
-		// ignore state updates when component is locked
-		if (props.beforeValueChange && this.locked) {
-			return;
-		}
-
-		this.locked = true;
-		const currentValue = SingleRange.parseValue(value, props);
+	setValue = (value, props = this.props, hasMounted = true) => {
+		const currentValue
+			= typeof value === 'string' ? SingleRange.parseValue(value, props) : value;
 
 		const performUpdate = () => {
-			this.setState(
-				{
-					currentValue,
-				},
-				() => {
-					this.updateQuery(currentValue, props);
-					this.locked = false;
-					if (props.onValueChange) props.onValueChange(currentValue);
-				},
-			);
+			const handleUpdates = () => {
+				this.updateQuery(currentValue, props);
+				if (props.onValueChange) props.onValueChange(currentValue);
+			};
+
+			if (hasMounted) {
+				this.setState(
+					{
+						currentValue,
+					},
+					handleUpdates,
+				);
+			} else {
+				handleUpdates();
+			}
 		};
 
 		checkValueChange(props.componentId, currentValue, props.beforeValueChange, performUpdate);
 	};
 
 	updateQuery = (value, props) => {
-		const query = props.customQuery || SingleRange.defaultQuery;
+		const { customQuery } = props;
+		let query = SingleRange.defaultQuery(value, props);
+		let customQueryOptions;
+		if (customQuery) {
+			({ query } = customQuery(value, props) || {});
+			customQueryOptions = getOptionsFromQuery(customQuery(value, props));
+			updateCustomQuery(props.componentId, props, value);
+		}
+		props.setQueryOptions(props.componentId, customQueryOptions);
 
 		props.updateQuery({
 			componentId: props.componentId,
-			query: query(value, props),
+			query,
 			value,
 			label: props.filterLabel,
 			showFilter: props.showFilter,
 			URLParams: props.URLParams,
-			componentType: 'SINGLERANGE',
+			componentType: componentTypes.singleRange,
 		});
 	};
 
 	handleClick = (e) => {
-		this.setValue(e.target.value);
+		const { value, onChange } = this.props;
+		const { value: rangeValue } = e.target;
+
+		if (value === undefined) {
+			this.setValue(rangeValue);
+		} else if (onChange) {
+			onChange(rangeValue);
+		}
 	};
 
 	render() {
@@ -137,17 +149,26 @@ class SingleRange extends Component {
 						{this.props.title}
 					</Title>
 				)}
-				<UL className={getClassName(this.props.innerClass, 'list') || null}>
+				<UL
+					className={getClassName(this.props.innerClass, 'list') || null}
+					aria-label={`${this.props.componentId}-items`}
+					role="radiogroup"
+				>
 					{this.props.data.map((item) => {
 						const selected
 							= !!this.state.currentValue
 							&& this.state.currentValue.label === item.label;
 						return (
-							<li key={item.label} className={`${selected ? 'active' : ''}`}>
+							<li
+								key={item.label}
+								className={`${selected ? 'active' : ''}`}
+								role="radio"
+								aria-checked={selected}
+							>
 								<Radio
 									className={getClassName(this.props.innerClass, 'radio')}
 									id={`${this.props.componentId}-${item.label}`}
-									name={this.props.componentId}
+									tabIndex={selected ? '-1' : '0'}
 									value={item.label}
 									onChange={this.handleClick}
 									checked={selected}
@@ -157,7 +178,7 @@ class SingleRange extends Component {
 									className={getClassName(this.props.innerClass, 'label') || null}
 									htmlFor={`${this.props.componentId}-${item.label}`}
 								>
-									{item.label}
+									<span>{item.label}</span>
 								</label>
 							</li>
 						);
@@ -169,12 +190,9 @@ class SingleRange extends Component {
 }
 
 SingleRange.propTypes = {
-	addComponent: types.funcRequired,
-	removeComponent: types.funcRequired,
-	setQueryListener: types.funcRequired,
 	updateQuery: types.funcRequired,
-	watchComponent: types.funcRequired,
 	selectedValue: types.selectedValue,
+	setCustomQuery: types.funcRequired,
 	// component props
 	beforeValueChange: types.func,
 	className: types.string,
@@ -182,17 +200,21 @@ SingleRange.propTypes = {
 	customQuery: types.func,
 	data: types.data,
 	dataField: types.stringRequired,
-	defaultSelected: types.string,
+	defaultValue: types.string,
+	value: types.string,
 	filterLabel: types.string,
 	innerClass: types.style,
+	nestedField: types.string,
 	onQueryChange: types.func,
 	onValueChange: types.func,
+	onChange: types.func,
 	react: types.react,
 	showFilter: types.bool,
 	showRadio: types.boolRequired,
 	style: types.style,
 	title: types.title,
 	URLParams: types.bool,
+	includeNullValues: types.bool,
 };
 
 SingleRange.defaultProps = {
@@ -201,7 +223,11 @@ SingleRange.defaultProps = {
 	showRadio: true,
 	style: {},
 	URLParams: false,
+	includeNullValues: false,
 };
+
+// Add componentType for SSR
+SingleRange.componentType = componentTypes.singleRange;
 
 const mapStateToProps = (state, props) => ({
 	selectedValue:
@@ -211,15 +237,26 @@ const mapStateToProps = (state, props) => ({
 });
 
 const mapDispatchtoProps = dispatch => ({
-	addComponent: component => dispatch(addComponent(component)),
-	removeComponent: component => dispatch(removeComponent(component)),
+	setCustomQuery: (component, query) => dispatch(setCustomQuery(component, query)),
 	updateQuery: updateQueryObject => dispatch(updateQuery(updateQueryObject)),
-	watchComponent: (component, react) => dispatch(watchComponent(component, react)),
-	setQueryListener: (component, onQueryChange, beforeQueryChange) =>
-		dispatch(setQueryListener(component, onQueryChange, beforeQueryChange)),
+	setQueryOptions: (component, props, execute) =>
+		dispatch(setQueryOptions(component, props, execute)),
 });
 
-export default connect(
+const ConnectedComponent = connect(
 	mapStateToProps,
 	mapDispatchtoProps,
-)(SingleRange);
+)(props => (
+	<ComponentWrapper {...props} componentType={componentTypes.singleRange}>
+		{() => <SingleRange ref={props.myForwardedRef} {...props} />}
+	</ComponentWrapper>
+));
+
+// eslint-disable-next-line
+const ForwardRefComponent = React.forwardRef((props, ref) => (
+	<ConnectedComponent {...props} myForwardedRef={ref} />
+));
+hoistNonReactStatics(ForwardRefComponent, SingleRange);
+
+ForwardRefComponent.name = 'SingleRange';
+export default ForwardRefComponent;

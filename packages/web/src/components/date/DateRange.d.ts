@@ -3,19 +3,17 @@ import { CommonProps } from '../../';
 import * as types from '../../types';
 
 export interface DateRangeProps extends CommonProps {
-	componentId: string;
-	className?: string;
-	onQueryChange?: (...args: any[]) => any;
-	style?: types.style;
-	// non-common props
 	autoFocusEnd?: boolean;
 	dataField: string;
+	customQuery?: (...args: any[]) => any;
 	dayPickerInputProps?: types.props;
-	defaultSelected?: types.dateObject;
+	defaultValue?: types.dateObject;
+	value?: types.dateObject;
 	filterLabel?: string;
 	focused?: boolean;
 	initialMonth?: types.dateObject;
 	innerClass?: types.style;
+	nestedField?: string;
 	numberOfMonths?: number;
 	placeholder?: types.rangeLabels;
 	queryFormat?: types.queryFormatDate;
@@ -24,8 +22,10 @@ export interface DateRangeProps extends CommonProps {
 	showFilter?: boolean;
 	theme?: types.style;
 	title?: string;
+	onChange?: (...args: any[]) => any;
+	parseDate?: (...args: any[]) => any;
 }
 
-declare const DateRange: React.ComponentType<DateRangeProps>;
+declare const DateRange: React.ComponentClass<DateRangeProps>;
 
 export default DateRange;

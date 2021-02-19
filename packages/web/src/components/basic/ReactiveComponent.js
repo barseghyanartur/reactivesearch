@@ -1,33 +1,66 @@
 import React, { Component } from 'react';
 
 import {
-	addComponent,
-	removeComponent,
-	watchComponent,
 	updateQuery,
 	setQueryOptions,
-	setQueryListener,
+	setCustomQuery,
+	setDefaultQuery,
 } from '@appbaseio/reactivecore/lib/actions';
 import {
-	pushToAndClause,
 	parseHits,
 	isEqual,
 	checkPropChange,
+	checkSomePropChange,
+	getOptionsFromQuery,
+	getCompositeAggsQuery,
+	getResultStats,
+	updateCustomQuery,
+	updateDefaultQuery,
 } from '@appbaseio/reactivecore/lib/utils/helper';
 import types from '@appbaseio/reactivecore/lib/utils/types';
-
-import { connect } from '../../utils';
+import { getInternalComponentID } from '@appbaseio/reactivecore/lib/utils/transform';
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
+import { connect, getComponent, hasCustomRenderer } from '../../utils';
+import ComponentWrapper from '../basic/ComponentWrapper';
 
 class ReactiveComponent extends Component {
 	constructor(props) {
 		super(props);
 		this.internalComponent = null;
 		this.defaultQuery = null;
-		props.setQueryListener(props.componentId, props.onQueryChange, null);
+		this.setQuery = (data) => {
+			if (!data) {
+				console.error('setQuery accepts the arguments of shape { query, options, value }.');
+				return;
+			}
 
-		this.setQuery = (obj) => {
+			const { options, ...obj } = data;
+			if (options) {
+				props.setQueryOptions(
+					props.componentId,
+					{ ...options, ...this.getAggsQuery() },
+					false,
+				);
+			}
+
+			let queryToBeSet = obj.query;
+
+			// when enableAppbase is true, Backend throws error because of repeated query in request body
+			if (obj && obj.query && obj.query.query) {
+				queryToBeSet = obj.query.query;
+			}
+
+			// Update customQuery field for RS API
+			if ((obj && obj.query) || options) {
+				const customQuery = { ...options };
+				if (obj && obj.query) {
+					customQuery.query = queryToBeSet;
+				}
+				props.setCustomQuery(props.componentId, customQuery);
+			}
 			this.props.updateQuery({
 				...obj,
+				query: queryToBeSet,
 				componentId: props.componentId,
 				label: props.filterLabel,
 				showFilter: props.showFilter,
@@ -36,157 +69,278 @@ class ReactiveComponent extends Component {
 		};
 
 		if (props.defaultQuery) {
-			this.internalComponent = `${props.componentId}__internal`;
+			this.internalComponent = getInternalComponentID(props.componentId);
+		}
+
+		// Set custom and default queries in store
+		updateCustomQuery(props.componentId, props, undefined);
+		updateDefaultQuery(props.componentId, props, undefined);
+
+		if (this.internalComponent && props.defaultQuery) {
+			this.defaultQuery = props.defaultQuery();
+			const { query } = this.defaultQuery || {};
+			const defaultQueryOptions = this.defaultQuery
+				? getOptionsFromQuery(this.defaultQuery)
+				: null;
+
+			if (defaultQueryOptions) {
+				props.setQueryOptions(
+					this.internalComponent,
+					{ ...defaultQueryOptions, ...this.getAggsQuery() },
+					false,
+				);
+			} else this.props.setQueryOptions(this.internalComponent, this.getAggsQuery());
+
+			props.updateQuery({
+				componentId: this.internalComponent,
+				query: query || null,
+			});
 		}
 	}
 
-	componentWillMount() {
-		this.props.addComponent(this.props.componentId);
-		if (this.internalComponent) {
-			this.props.addComponent(this.internalComponent);
+	componentDidMount() {
+		const {
+			customQuery,
+			selectedValue,
+			value,
+			defaultValue,
+			componentId,
+			filterLabel,
+			showFilter,
+			URLParams,
+		} = this.props;
+		const initialValue = selectedValue || value || defaultValue || null;
+
+		if (customQuery) {
+			const calcCustomQuery = customQuery(this.props);
+			const { query } = calcCustomQuery || {};
+			const customQueryOptions = calcCustomQuery
+				? getOptionsFromQuery(calcCustomQuery)
+				: null;
+			if (customQueryOptions) {
+				this.props.setQueryOptions(
+					componentId,
+					{ ...customQueryOptions, ...this.getAggsQuery() },
+					false,
+				);
+			} else this.props.setQueryOptions(componentId, this.getAggsQuery(), false);
+			this.props.updateQuery({
+				componentId,
+				query,
+				value: initialValue,
+				label: filterLabel,
+				showFilter,
+				URLParams,
+			});
+		}
+	}
+
+	componentDidUpdate(prevProps) {
+		// only consider hits and defaultQuery when customQuery is absent
+		if (this.props.onData) {
+			checkSomePropChange(
+				this.props,
+				prevProps,
+				['hits', 'aggregations', 'promotedResults', 'total', 'time', 'hidden'],
+				() => {
+					this.props.onData(this.getData());
+				},
+			);
 		}
 
-		this.setReact(this.props);
+		checkPropChange(this.props.selectedValue, prevProps.selectedValue, () => {
+			/*
+				Reset query when SelectedFilters are clicked. Note: `selectedValue` becomes null.
+			*/
 
-		// set query for internal component
-		if (this.internalComponent && this.props.defaultQuery) {
+			if (this.props.selectedValue === null) {
+				this.props.updateQuery({
+					componentId: this.props.componentId,
+					query: null,
+				});
+			}
+		});
+
+		if (this.props.defaultQuery && !isEqual(this.props.defaultQuery(), this.defaultQuery)) {
 			this.defaultQuery = this.props.defaultQuery();
 			const { query, ...queryOptions } = this.defaultQuery || {};
 
 			if (queryOptions) {
-				this.props.setQueryOptions(this.internalComponent, queryOptions, false);
-			}
-
+				this.props.setQueryOptions(
+					this.internalComponent,
+					{ ...queryOptions, ...this.getAggsQuery() },
+					false,
+				);
+			} else this.props.setQueryOptions(this.internalComponent, this.getAggsQuery(), false);
+			updateDefaultQuery(this.props.componentId, this.props, undefined);
 			this.props.updateQuery({
 				componentId: this.internalComponent,
 				query: query || null,
 			});
 		}
-	}
 
-	componentWillReceiveProps(nextProps) {
 		if (
-			nextProps.onAllData
-			&& (!isEqual(nextProps.hits, this.props.hits)
-				|| !isEqual(nextProps.aggregations, this.props.aggregations))
+			this.props.customQuery
+			&& !isEqual(this.props.customQuery(this.props), prevProps.customQuery(this.props))
 		) {
-			nextProps.onAllData(parseHits(nextProps.hits), nextProps.aggregations);
-		}
-
-		if (nextProps.defaultQuery && !isEqual(nextProps.defaultQuery(), this.defaultQuery)) {
-			this.defaultQuery = nextProps.defaultQuery();
-			const { query, ...queryOptions } = this.defaultQuery || {};
+			const { query, ...queryOptions } = this.props.customQuery(this.props) || {};
 
 			if (queryOptions) {
-				nextProps.setQueryOptions(this.internalComponent, queryOptions, false);
-			}
-
-			nextProps.updateQuery({
-				componentId: this.internalComponent,
+				this.props.setQueryOptions(
+					this.props.componentId,
+					{ ...queryOptions, ...this.getAggsQuery() },
+					false,
+				);
+			} else this.props.setQueryOptions(this.props.componentId, this.getAggsQuery(), false);
+			updateCustomQuery(this.props.componentId, this.props, undefined);
+			this.props.updateQuery({
+				componentId: this.props.componentId,
 				query: query || null,
 			});
 		}
-
-		checkPropChange(this.props.react, nextProps.react, () => {
-			this.setReact(nextProps);
-		});
 	}
 
-	componentWillUnmount() {
-		this.props.removeComponent(this.props.componentId);
-
-		if (this.internalComponent) {
-			this.props.removeComponent(this.internalComponent);
-		}
-	}
-
-	setReact = (props) => {
-		const { react } = props;
-
-		if (react) {
-			if (this.internalComponent) {
-				const newReact = pushToAndClause(react, this.internalComponent);
-				props.watchComponent(props.componentId, newReact);
-			} else {
-				props.watchComponent(props.componentId, react);
-			}
-		} else if (this.internalComponent) {
-			props.watchComponent(props.componentId, {
-				and: this.internalComponent,
+	getAggsQuery = () => {
+		if (this.props.aggregationField) {
+			return getCompositeAggsQuery({
+				props: this.props,
+				showTopHits: true,
+				value: this.props.value,
 			});
 		}
+		return {};
 	};
 
-	render() {
-		const {
-			children,
-			addComponent: addFn,
-			watchComponent: watchFn,
-			removeComponent: removeFn,
-			setQueryOptions: queryOptionsFn,
-			updateQuery: updateFn,
-			...rest
-		} = this.props;
+	get stats() {
+		return getResultStats(this.props);
+	}
 
-		try {
-			const childrenWithProps = React.Children.map(children, child =>
-				React.cloneElement(child, { ...rest, setQuery: this.setQuery }));
-			return <div>{childrenWithProps}</div>;
-		} catch (e) {
-			return null;
+	getData() {
+		const {
+			hits, aggregations, aggregationData, promotedResults, rawData,
+		} = this.props;
+		let filteredResults = parseHits(hits);
+		if (promotedResults.length) {
+			const ids = promotedResults.map(item => item._id).filter(Boolean);
+			if (ids) {
+				filteredResults = filteredResults.filter(item => !ids.includes(item._id));
+			}
+			filteredResults = [...promotedResults, ...filteredResults];
 		}
+		return {
+			data: filteredResults,
+			promotedData: promotedResults,
+			aggregationData: aggregationData || [],
+			rawData,
+			aggregations,
+			resultStats: this.stats,
+		};
+	}
+
+	getComponent() {
+		const { error, isLoading, selectedValue } = this.props;
+		const data = {
+			error,
+			loading: isLoading,
+			...this.getData(),
+			value: selectedValue,
+			setQuery: this.setQuery,
+		};
+		return getComponent(data, this.props);
+	}
+
+	render() {
+		if (hasCustomRenderer(this.props)) {
+			return this.getComponent();
+		}
+		return null;
 	}
 }
 
 ReactiveComponent.defaultProps = {
 	showFilter: true,
 	URLParams: false,
+	size: 20,
 };
 
 ReactiveComponent.propTypes = {
-	addComponent: types.funcRequired,
-	removeComponent: types.funcRequired,
-	setQueryListener: types.funcRequired,
+	error: types.title,
 	setQueryOptions: types.funcRequired,
 	updateQuery: types.funcRequired,
-	watchComponent: types.funcRequired,
+	aggregationField: types.string,
+	aggregationSize: types.number,
+	size: types.number,
 	aggregations: types.selectedValues,
+	aggregationData: types.aggregationData,
 	hits: types.data,
+	rawData: types.rawData,
+	promotedResults: types.hits,
+	isLoading: types.bool,
 	selectedValue: types.selectedValue,
+	setCustomQuery: types.funcRequired,
 	// component props
-	children: types.children,
+	children: types.func,
 	componentId: types.stringRequired,
 	defaultQuery: types.func,
+	customQuery: types.func,
+	defaultValue: types.any, // eslint-disable-line
+	value: types.any, // eslint-disable-line
 	filterLabel: types.string,
 	onQueryChange: types.func,
+	onError: types.func,
 	react: types.react,
+	render: types.func,
 	showFilter: types.bool,
 	URLParams: types.bool,
-	onAllData: types.func,
+	onData: types.func,
 };
+
+// Add componentType for SSR
+ReactiveComponent.componentType = componentTypes.reactiveComponent;
 
 const mapStateToProps = (state, props) => ({
 	aggregations:
 		(state.aggregations[props.componentId] && state.aggregations[props.componentId]) || null,
+	aggregationData: state.compositeAggregations[props.componentId] || [],
 	hits: (state.hits[props.componentId] && state.hits[props.componentId].hits) || [],
+	rawData: state.rawData[props.componentId],
 	selectedValue:
 		(state.selectedValues[props.componentId]
 			&& state.selectedValues[props.componentId].value)
 		|| null,
+	isLoading: state.isLoading[props.componentId],
+	error: state.error[props.componentId],
+	promotedResults: state.promotedResults[props.componentId] || [],
+	time: (state.hits[props.componentId] && state.hits[props.componentId].time) || 0,
+	total: state.hits[props.componentId] && state.hits[props.componentId].total,
+	hidden: state.hits[props.componentId] && state.hits[props.componentId].hidden,
 });
 
 const mapDispatchtoProps = dispatch => ({
-	addComponent: component => dispatch(addComponent(component)),
-	removeComponent: component => dispatch(removeComponent(component)),
+	setCustomQuery: (component, query) => dispatch(setCustomQuery(component, query)),
+	setDefaultQuery: (component, query) => dispatch(setDefaultQuery(component, query)),
 	setQueryOptions: (component, props, execute) =>
 		dispatch(setQueryOptions(component, props, execute)),
-	setQueryListener: (component, onQueryChange, beforeQueryChange) =>
-		dispatch(setQueryListener(component, onQueryChange, beforeQueryChange)),
 	updateQuery: updateQueryObject => dispatch(updateQuery(updateQueryObject)),
-	watchComponent: (component, react) => dispatch(watchComponent(component, react)),
 });
 
-export default connect(
+const ConnectedComponent = connect(
 	mapStateToProps,
 	mapDispatchtoProps,
-)(ReactiveComponent);
+)(props => (
+	<ComponentWrapper
+		{...props}
+		internalComponent={!!props.defaultQuery}
+		componentType={componentTypes.reactiveComponent}
+	>
+		{() => <ReactiveComponent ref={props.myForwardedRef} {...props} />}
+	</ComponentWrapper>
+));
+
+// eslint-disable-next-line
+const ForwardRefComponent = React.forwardRef((props, ref) => (
+	<ConnectedComponent {...props} myForwardedRef={ref} />
+));
+
+ForwardRefComponent.name = 'ReactiveComponent';
+export default ForwardRefComponent;

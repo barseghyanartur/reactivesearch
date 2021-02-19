@@ -7,7 +7,7 @@ import Title from '../../styles/Title';
 import { connect } from '../../utils/index';
 
 const { setValue, clearValues } = Actions;
-const { getClassName } = helper;
+const { getClassName, handleA11yAction } = helper;
 
 const SelectedFilters = {
 	name: 'SelectedFilters',
@@ -16,21 +16,27 @@ const SelectedFilters = {
 		clearAllLabel: VueTypes.string.def('Clear All'),
 		innerClass: types.style,
 		showClearAll: VueTypes.bool.def(true),
-		title: types.title
+		title: types.title,
 	},
-	inject: ['theme'],
+	inject: {
+		theme: {
+			from: 'theme_reactivesearch',
+		},
+	},
 	render() {
 		if (this.$scopedSlots.default) {
-			return this.$scopedSlots.default(this.$props);
+			return this.$scopedSlots.default({
+				components: this.components,
+				selectedValues: this.selectedValues,
+				clearValues: this.clearValues,
+				setValue: this.setValue,
+			});
 		}
 		const filtersToRender = this.renderFilters();
 		const hasValues = !!filtersToRender.length;
 		return (
-			<Container
-				class={`${filters(this.theme)} ${this.$props.className || ''}`}
-			>
-				{this.$props.title
-					&& hasValues && (
+			<Container class={`${filters(this.theme)} ${this.$props.className || ''}`}>
+				{this.$props.title && hasValues && (
 					<Title class={getClassName(this.$props.innerClass, 'title') || ''}>
 						{this.$props.title}
 					</Title>
@@ -41,9 +47,12 @@ const SelectedFilters = {
 						class={getClassName(this.$props.innerClass, 'button') || ''}
 						{...{
 							on: {
-								click: this.clearValues
-							}
+								click: this.clearValues,
+								keypress: event =>
+									handleA11yAction(event, () => this.clearValues()),
+							},
 						}}
+						tabIndex="0"
 					>
 						{this.$props.clearAllLabel}
 					</Button>
@@ -88,9 +97,7 @@ const SelectedFilters = {
 		renderFilters() {
 			const { selectedValues } = this;
 			return Object.keys(selectedValues)
-				.filter(
-					id => this.components.includes(id) && selectedValues[id].showFilter
-				)
+				.filter(id => this.components.includes(id) && selectedValues[id].showFilter)
 				.map((component, index) => {
 					const { label, value } = selectedValues[component];
 					const isArray = Array.isArray(value);
@@ -103,9 +110,14 @@ const SelectedFilters = {
 								key={`${component}-${index + 1}`}
 								{...{
 									on: {
-										click: () => this.remove(component, value)
-									}
+										click: () => this.remove(component, value),
+										keypress: event =>
+											handleA11yAction(event, () =>
+												this.remove(component, value),
+											),
+									},
 								}}
+								tabIndex="0"
 							>
 								<span>
 									{selectedValues[component].label}: {valueToRender}
@@ -118,24 +130,26 @@ const SelectedFilters = {
 					return null;
 				})
 				.filter(Boolean);
-		}
-	}
+		},
+	},
+	watch: {
+		selectedValues(newVal) {
+			this.$emit('change', newVal);
+		},
+	},
 };
 
 const mapStateToProps = state => ({
 	components: state.components,
-	selectedValues: state.selectedValues
+	selectedValues: state.selectedValues,
 });
 
 const mapDispatchtoProps = {
 	clearValuesAction: clearValues,
-	setValue
+	setValue,
 };
 
-const RcConnected = connect(
-	mapStateToProps,
-	mapDispatchtoProps
-)(SelectedFilters);
+const RcConnected = connect(mapStateToProps, mapDispatchtoProps)(SelectedFilters);
 
 SelectedFilters.install = function(Vue) {
 	Vue.component(SelectedFilters.name, RcConnected);

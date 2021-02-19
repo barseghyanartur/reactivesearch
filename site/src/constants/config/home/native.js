@@ -21,26 +21,25 @@ export default {
 		title: 'React Native UI Components for ElasticSearch',
 		description: 'Build data-driven search experiences for iOS and Android apps.',
 		image: {
-			src: 'images/native/landing.png',
+			src: '../../reactivesearch/images/native/landing.png',
 			alt: 'Native Components',
 		},
 		button: {
 			title: 'Get Started',
-			href:
-				'./quickstart',
+			href: './quickstart',
 		},
 		link: {
 			title: 'Docs',
-			href: 'https://opensource.appbase.io/reactive-manual/native/getting-started/reactivesearch.html',
+			href: 'https://docs.appbase.io/docs/reactivesearch/native/overview/QuickStart/',
 		},
 	},
 	banner2: {
 		image: {
-			src: 'images/native/components.png',
+			src: '../../reactivesearch/images/native/components.png',
 			alt: 'Components',
 			mobile: {
-				src: 'images/native/components.png',
-				srcSet: 'images/native/components.png',
+				src: '../../reactivesearch/images/native/components.png',
+				srcSet: '../../reactivesearch/images/native/components.png',
 			},
 		},
 		title: 'UI Components for every occasion',
@@ -48,11 +47,11 @@ export default {
 			'Build the perfect search experience using our UI components or by creating your own. Over 10 prebuilt components with customizable queries and configurable styles.',
 		button: {
 			title: 'View Components',
-			href: 'https://opensource.appbase.io/reactive-manual/native/components/textfield.html',
+			href: 'https://docs.appbase.io/docs/reactivesearch/native/components/TextField/',
 		},
 		link: {
 			title: 'Creating your components',
-			href: 'https://opensource.appbase.io/reactive-manual/native/advanced/reactivecomponent.html',
+			href: 'https://docs.appbase.io/docs/reactivesearch/native/advanced/ReactiveComponent/',
 		},
 		sketch: {
 			href: '../../resources/ReactiveSearchNative_Playground.sketch',
@@ -67,7 +66,7 @@ export default {
 		cards: [
 			{
 				image: {
-					src: 'images/rocket.png',
+					src: '../../reactivesearch/images/rocket.png',
 					alt: 'Data-driven UIs',
 				},
 				title: 'Launch and iterate faster',
@@ -78,26 +77,27 @@ export default {
 			},
 			{
 				image: {
-					src: 'icons/1.png',
+					src: '../../reactivesearch/icons/1.png',
 					alt: 'Icon',
 				},
 				title: 'Works with existing UIs',
-				description: 'Already have your own components? Bring them to Reactivesearch Native.',
+				description:
+					'Already have your own components? Bring them to Reactivesearch Native.',
 				href:
-					'https://opensource.appbase.io/reactive-manual/native/advanced/reactivecomponent.html',
+					'https://docs.appbase.io/docs/reactivesearch/native/advanced/ReactiveComponent/',
 			},
 			{
 				image: {
-					src: 'icons/2.png',
+					src: '../../reactivesearch/icons/2.png',
 					alt: 'Icon',
 				},
 				title: 'Configurable styles',
 				description: 'Styled components with rich theming and style injection support.',
-				href: 'https://opensource.appbase.io/reactive-manual/native/advanced/style.html',
+				href: 'https://docs.appbase.io/docs/reactivesearch/native/advanced/Style/',
 			},
 			{
 				image: {
-					src: 'icons/3.png',
+					src: '../../reactivesearch/icons/3.png',
 					alt: 'Icon',
 				},
 				title: 'Create cross-platform apps',
@@ -107,23 +107,23 @@ export default {
 			},
 			{
 				image: {
-					src: 'icons/4.png',
+					src: '../../reactivesearch/icons/4.png',
 					alt: 'Icon',
 				},
 				title: 'Elasticsearch compatible',
 				description: 'Connect to an ES index hosted anywhere. Supports v2, v5 and v6.',
-				href:
-					'https://opensource.appbase.io/reactive-manual/getting-started/native/reactivebase.html',
+				href: 'https://docs.appbase.io/docs/reactivesearch/native/overview/ReactiveBase/',
 			},
 			{
 				image: {
-					src: 'icons/5.png',
+					src: '../../reactivesearch/icons/5.png',
 					alt: 'Icon',
 				},
 				title: 'Customizable queries',
 				description:
 					'Components come with good query defaults, that can be customized with Elasticsearch query DSL.',
-				href: 'https://opensource.appbase.io/reactive-manual/native/advanced/customquery.html',
+				href:
+					'https://docs.appbase.io/docs/reactivesearch/native/advanced/Guides/#custom-queries',
 			},
 		],
 	},
@@ -139,7 +139,7 @@ export default {
 			},
 			link: {
 				title: 'Learn More',
-				href: 'https://opensource.appbase.io/reactive-manual/native/getting-started/reactivesearch.html',
+				href: 'https://docs.appbase.io/docs/reactivesearch/native/overview/QuickStart/',
 			},
 		},
 		{
@@ -161,19 +161,19 @@ export default {
 		title: 'Check our demos',
 		demos: [
 			{
-				src: 'images/native/booksearch.png',
+				src: '../../reactivesearch/images/native/booksearch.png',
 				title: 'Book Search',
-				href: 'https://snack.expo.io/@metagrover/booksearch',
+				href: 'https://snack.expo.io/@lakhansamani/booksearch',
 			},
 			{
-				src: 'images/native/gitxplore.png',
+				src: '../../reactivesearch/images/native/gitxplore.png',
 				title: 'GitHub Search',
-				href: 'https://snack.expo.io/@dhruvdutt/gitxplore-native-app',
+				href: 'https://snack.expo.io/@lakhansamani/gitxplore-native-app',
 			},
 			{
-				src: 'images/native/todo.png',
-				title: 'Todo',
-				href: 'https://snack.expo.io/@dhruvdutt/todo',
+				src: '../../reactivesearch/images/native/earthquake_reporter.png',
+				title: 'Earthquake Reporter',
+				href: 'https://snack.expo.io/@lakhansamani/earthquake-reporter',
 			},
 		],
 	},

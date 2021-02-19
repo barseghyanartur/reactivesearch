@@ -1,77 +1,71 @@
+/** @jsx jsx */
+import { jsx } from '@emotion/core';
 import React, { Component } from 'react';
 
-import {
-	addComponent,
-	removeComponent,
-	watchComponent,
-	updateQuery,
-	setQueryListener,
-} from '@appbaseio/reactivecore/lib/actions';
+import { updateQuery, setQueryOptions, setCustomQuery } from '@appbaseio/reactivecore/lib/actions';
+import hoistNonReactStatics from 'hoist-non-react-statics';
 import {
 	checkValueChange,
 	checkPropChange,
+	checkSomePropChange,
 	getClassName,
+	getOptionsFromQuery,
+	updateCustomQuery,
 } from '@appbaseio/reactivecore/lib/utils/helper';
 import types from '@appbaseio/reactivecore/lib/utils/types';
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
 
 import Title from '../../styles/Title';
 import Button, { numberBoxContainer } from '../../styles/Button';
 import Flex from '../../styles/Flex';
 import Container from '../../styles/Container';
 import { connect } from '../../utils';
+import ComponentWrapper from '../basic/ComponentWrapper';
 
 class NumberBox extends Component {
 	constructor(props) {
 		super(props);
 
 		this.type = 'term';
+		const currentValue
+			= props.selectedValue || props.defaultValue || props.value || props.data.start;
 		this.state = {
-			currentValue: this.props.data.start,
+			currentValue,
 		};
-		this.locked = false;
-		props.setQueryListener(props.componentId, props.onQueryChange, null);
-	}
 
-	componentWillMount() {
-		this.props.addComponent(this.props.componentId);
-		this.setReact(this.props);
+		// Set custom query in store
+		updateCustomQuery(props.componentId, props, currentValue);
+		const hasMounted = false;
 
-		if (this.props.selectedValue) {
-			this.setValue(this.props.selectedValue);
-		} else if (this.props.defaultSelected) {
-			this.setValue(this.props.defaultSelected);
+		if (currentValue) {
+			this.setValue(currentValue, this.props, hasMounted);
 		}
 	}
 
-	componentWillReceiveProps(nextProps) {
-		checkPropChange(this.props.react, nextProps.react, () => {
-			this.setReact(nextProps);
+	componentDidUpdate(prevProps) {
+		checkPropChange(this.props.value, prevProps.value, () => {
+			this.setValue(this.props.value, this.props);
 		});
-		checkPropChange(this.props.defaultSelected, nextProps.defaultSelected, () => {
-			this.setValue(nextProps.defaultSelected, nextProps);
+		checkPropChange(this.props.queryFormat, this.props.queryFormat, () => {
+			this.updateQuery(this.state.currentValue, this.props);
 		});
-		checkPropChange(this.props.queryFormat, nextProps.queryFormat, () => {
-			this.updateQuery(this.state.currentValue, nextProps);
+		checkSomePropChange(this.props, prevProps, ['dataField', 'nestedField'], () => {
+			this.updateQuery(this.state.currentValue, this.props);
 		});
-		checkPropChange(this.props.dataField, nextProps.dataField, () => {
-			this.updateQuery(this.state.currentValue, nextProps);
-		});
-	}
-
-	componentWillUnmount() {
-		this.props.removeComponent(this.props.componentId);
 	}
 
 	static defaultQuery = (value, props) => {
+		let query = null;
 		switch (props.queryFormat) {
 			case 'exact':
-				return {
+				query = {
 					term: {
 						[props.dataField]: value,
 					},
 				};
+				break;
 			case 'lte':
-				return {
+				query = {
 					range: {
 						[props.dataField]: {
 							lte: value,
@@ -79,8 +73,9 @@ class NumberBox extends Component {
 						},
 					},
 				};
+				break;
 			default:
-				return {
+				query = {
 					range: {
 						[props.dataField]: {
 							gte: value,
@@ -89,20 +84,29 @@ class NumberBox extends Component {
 					},
 				};
 		}
-	};
-
-	setReact(props) {
-		if (props.react) {
-			props.watchComponent(props.componentId, props.react);
+		if (query && props.nestedField) {
+			return {
+				nested: {
+					path: props.nestedField,
+					query,
+				},
+			};
 		}
-	}
+		return query;
+	};
 
 	incrementValue = () => {
 		if (this.state.currentValue === this.props.data.end) {
 			return;
 		}
 		const { currentValue } = this.state;
-		this.setValue(currentValue + 1);
+		const { value, onChange } = this.props;
+
+		if (value === undefined) {
+			this.setValue(currentValue + 1);
+		} else if (onChange) {
+			onChange(currentValue + 1);
+		}
 	};
 
 	decrementValue = () => {
@@ -110,41 +114,54 @@ class NumberBox extends Component {
 			return;
 		}
 		const { currentValue } = this.state;
-		this.setValue(currentValue - 1);
+		const { value, onChange } = this.props;
+
+		if (value === undefined) {
+			this.setValue(currentValue - 1);
+		} else if (onChange) {
+			onChange(currentValue - 1);
+		}
 	};
 
-	setValue = (value, props = this.props) => {
-		// ignore state updates when component is locked
-		if (props.beforeValueChange && this.locked) {
-			return;
-		}
-
-		this.locked = true;
+	setValue = (value, props = this.props, hasMounted = true) => {
 		const performUpdate = () => {
-			this.setState(
-				{
-					currentValue: value,
-				},
-				() => {
-					this.updateQuery(value, props);
-					this.locked = false;
-					if (props.onValueChange) props.onValueChange(value);
-				},
-			);
+			const handleUpdates = () => {
+				this.updateQuery(value, props);
+				if (props.onValueChange) props.onValueChange(value);
+			};
+
+			if (hasMounted) {
+				this.setState(
+					{
+						currentValue: value,
+					},
+					handleUpdates,
+				);
+			} else {
+				handleUpdates();
+			}
 		};
 		checkValueChange(props.componentId, value, props.beforeValueChange, performUpdate);
 	};
 
 	updateQuery = (value, props) => {
-		const query = props.customQuery || NumberBox.defaultQuery;
+		const { customQuery } = props;
+		let query = NumberBox.defaultQuery(value, props);
+		let customQueryOptions;
+		if (customQuery) {
+			({ query } = customQuery(value, props) || {});
+			customQueryOptions = getOptionsFromQuery(customQuery(value, props));
+			updateCustomQuery(props.componentId, props, value);
+		}
+		props.setQueryOptions(props.componentId, customQueryOptions);
 
 		props.updateQuery({
 			componentId: props.componentId,
-			query: query(value, props),
+			query,
 			value,
 			showFilter: false, // we don't need filters for NumberBox
 			URLParams: props.URLParams,
-			componentType: 'NUMBERBOX',
+			componentType: componentTypes.numberBox,
 		});
 	};
 
@@ -159,7 +176,7 @@ class NumberBox extends Component {
 				<Flex
 					labelPosition={this.props.labelPosition}
 					justifyContent="space-between"
-					className={numberBoxContainer}
+					css={numberBoxContainer}
 				>
 					<span className={getClassName(this.props.innerClass, 'label') || null}>
 						{this.props.data.label}
@@ -188,21 +205,23 @@ class NumberBox extends Component {
 }
 
 NumberBox.propTypes = {
-	addComponent: types.funcRequired,
-	removeComponent: types.funcRequired,
-	setQueryListener: types.funcRequired,
 	updateQuery: types.funcRequired,
-	watchComponent: types.funcRequired,
 	selectedValue: types.selectedValue,
+	setQueryOptions: types.funcRequired,
+	setCustomQuery: types.funcRequired,
 	// component props
 	className: types.string,
 	componentId: types.stringRequired,
 	data: types.dataNumberBox,
 	dataField: types.stringRequired,
-	defaultSelected: types.number,
+	defaultValue: types.number,
+	value: types.number,
 	innerClass: types.style,
+	nestedField: types.string,
 	labelPosition: types.labelPosition,
 	onQueryChange: types.func,
+	onValueChange: types.func,
+	onChange: types.func,
 	queryFormat: types.queryFormatNumberBox,
 	react: types.react,
 	style: types.style,
@@ -218,6 +237,9 @@ NumberBox.defaultProps = {
 	URLParams: false,
 };
 
+// Add componentType for SSR
+NumberBox.componentType = componentTypes.numberBox;
+
 const mapStateToProps = (state, props) => ({
 	selectedValue: state.selectedValues[props.componentId]
 		? state.selectedValues[props.componentId].value
@@ -225,15 +247,28 @@ const mapStateToProps = (state, props) => ({
 });
 
 const mapDispatchtoProps = dispatch => ({
-	addComponent: component => dispatch(addComponent(component)),
-	removeComponent: component => dispatch(removeComponent(component)),
+	setCustomQuery: (component, query) => dispatch(setCustomQuery(component, query)),
+
 	updateQuery: updateQueryObject => dispatch(updateQuery(updateQueryObject)),
-	watchComponent: (component, react) => dispatch(watchComponent(component, react)),
-	setQueryListener: (component, onQueryChange, beforeQueryChange) =>
-		dispatch(setQueryListener(component, onQueryChange, beforeQueryChange)),
+	setQueryOptions: (component, props, execute) =>
+		dispatch(setQueryOptions(component, props, execute)),
 });
 
-export default connect(
+const ConnectedComponent = connect(
 	mapStateToProps,
 	mapDispatchtoProps,
-)(NumberBox);
+)(props => (
+	<ComponentWrapper {...props} componentType={componentTypes.numberBox}>
+		{() => <NumberBox ref={props.myForwardedRef} {...props} />}
+	</ComponentWrapper>
+));
+
+// eslint-disable-next-line
+const ForwardRefComponent = React.forwardRef((props, ref) => (
+	<ConnectedComponent {...props} myForwardedRef={ref} />
+));
+
+hoistNonReactStatics(ForwardRefComponent, NumberBox);
+
+ForwardRefComponent.name = 'NumberBox';
+export default ForwardRefComponent;

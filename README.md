@@ -5,16 +5,16 @@
   <br />
 </h2>
 
-<p align="center" style="font-size: 1.2rem">A React and React Native UI components library for Elasticsearch</p>
+<p align="center" style="font-size: 1.2rem">UI components library for Elasticsearch: Available for React, Vue and React Native</p>
 <p align="center">
 Read how to build an e-commerce search UI</p>
 <p align="center">
-a.) <a href="https://codeburst.io/how-to-build-an-e-commerce-search-ui-with-react-and-elasticsearch-a581c823b2c3"> with React</a>, or b.) <a href="https://hackernoon.com/building-an-e-commerce-search-app-with-react-native-2c87760a2315">with React Native</a>.</p>
+a.) <a href="https://codeburst.io/how-to-build-a-yelp-like-search-app-using-react-and-elasticsearch-36a432bf6f92"> with React</a>, b.) <a href="https://medium.appbase.io/building-booksearch-application-using-vue-and-elasticsearch-a39615f4d6b3">with Vue</a> or c.) <a href="https://hackernoon.com/building-an-e-commerce-search-app-with-react-native-2c87760a2315">with React Native</a>.</p>
 <br/>
 <p align="center">
-  <a href="https://github.com/appbaseio/reactivesearch/tree/dev/packages/web" style="padding: 10px; display: inline-block;"><img src="https://i.imgur.com/Uo97x64.png" alt="web" title="web" /></a>
-  <a href="https://github.com/appbaseio/reactivesearch/tree/dev/packages/native" style="padding: 10px; display: inline-block;"><img src="https://i.imgur.com/jgZp3W2.png" alt="native" title="native" /></a>
-  <a href="https://github.com/appbaseio/reactivesearch/tree/dev/packages/maps" style="padding: 10px; display: inline-block;"><img src="https://i.imgur.com/bNPG50x.png" alt="native" title="native" /></a>
+  <a href="https://github.com/appbaseio/reactivesearch/tree/next/packages/web" style="padding: 10px; display: inline;"><img  width="30%" src="https://appbase.io/static/images/onboarding/finish-screen/React@2x.png" alt="web" title="web" /></a>
+  <a href="https://github.com/appbaseio/reactivesearch/tree/next/packages/vue" style="padding: 10px; display: inline;"><img   width="30%" src="https://appbase.io/static/images/onboarding/finish-screen/vue@2x.png" alt="vue" title="vue" /></a>
+  <a href="https://github.com/appbaseio/reactivesearch/tree/next/packages/native" style="padding: 10px; display: inline;"><img   width="30%" src="https://appbase.io/static/images/onboarding/finish-screen/ReactNative@2x.png" alt="native" title="native" /></a>
 </p>
 
 <hr />
@@ -28,6 +28,9 @@ a.) <a href="https://codeburst.io/how-to-build-an-e-commerce-search-ui-with-reac
 
 <br />
 
+<p>Check out the ReactiveSearch marketplace at <a href="https://reactiveapps.io/" target="_blank">reactiveapps.io</a>.</p>
+
+<br />
 
 ![Banner Image showing all the web UI components we offer](https://i.imgur.com/bJ1QKZS.png)
 
@@ -36,7 +39,6 @@ a.) <a href="https://codeburst.io/how-to-build-an-e-commerce-search-ui-with-reac
 ![Banner Image showing all the mobile UI components we offer](https://i.imgur.com/13TvjbE.png)
 
 [iOS and Android designer templates for sketch](https://opensource.appbase.io/reactivesearch/resources/ReactiveSearch_Playground.sketch).
-
 
 <br />
 
@@ -58,16 +60,16 @@ a.) <a href="https://codeburst.io/how-to-build-an-e-commerce-search-ui-with-reac
 
 ReactiveSearch is an Elasticsearch UI components library for React and React Native. It has 25+ components consisting of Lists, Ranges, Search UIs, Result displays and a way to bring any existing UI component into the library.
 
-The library is conceptually divided into two parts:  
+The library is conceptually divided into two parts:
 
 1. Sensor components and
 2. Actuator components.
 
 Each sensor component is built for applying a specific filter on the data. For example:
 
-* A [`SingleList`](https://opensource.appbase.io/reactive-manual/list-components/singlelist.html) sensor component applies an exact match filter based on the selected item.
-* A [`RangeSlider`](https://opensource.appbase.io/reactive-manual/range-components/rangeslider.html) component applies a numeric range query based on the values selected from the UI.
-* A [`DataSearch`](https://opensource.appbase.io/reactive-manual/search-components/datasearch.html) component applies a suggestions and search query based on the search term typed by the user.
+-   A [`SingleList`](https://docs.appbase.io/docs/reactivesearch/v3/list/singlelist/) sensor component applies an exact match filter based on the selected item.
+-   A [`RangeSlider`](https://docs.appbase.io/docs/reactivesearch/v3/range/rangeslider/) component applies a numeric range query based on the values selected from the UI.
+-   A [`DataSearch`](https://docs.appbase.io/docs/reactivesearch/v3/search/datasearch/) component applies a suggestions and search query based on the search term typed by the user.
 
 Sensor components can be configured to create a combined query context and render the matching results via an actuator component.
 
@@ -79,18 +81,31 @@ Sensor components can be configured to create a combined query context and rende
 
 ### Design
 
-* The sensor / actuator design pattern allows creating complex UIs where any number of sensors can be chained together to reactively update an actuator (or even multiple actuators).
-* The library handles the transformation of the UI interactions into database queries. You only need to include the components and associate each with a DB field.
-* Built in live updates - Actuators can be set to update results even when the underlying data changes in the DB.
-* Comes with scoped and styled components. Doesn't require any external CSS library import, comes with className and innerClass support.
-* Is themable via [`ThemeProvider`](https://opensource.appbase.io/reactive-manual/theming/themes.html).
+-   The sensor / actuator design pattern allows creating complex UIs where any number of sensors can be chained together to reactively update an actuator (or even multiple actuators).
+-   The library handles the transformation of the UI interactions into database queries. You only need to include the components and associate each with a DB field.
+-   Built in live updates - Actuators can be set to update results even when the underlying data changes in the DB.
+-   Comes with scoped and styled components. Doesn't require any external CSS library import, comes with className and innerClass support.
+-   Is themable via [`ThemeProvider`](https://docs.appbase.io/docs/reactivesearch/v3/theming/overview/).
 
 ### Ease of Use
 
-* One step installation with [npm i @appbaseio/reactivesearch](https://opensource.appbase.io/reactive-manual/v1/getting-started/reactivesearch.html),
-* A UMD build that works directly in the browser. Installation steps [here](https://opensource.appbase.io/reactive-manual/getting-started/reactivesearch.html#reactivesearch-as-umd),
-* Styled and scoped components that can be easily extended,
-* See the [reactivesearch starter app](https://github.com/appbaseio-apps/reactivesearch-starter-app).
+-   One step installation with [npm i @appbaseio/reactivesearch](https://docs.appbase.io/docs/reactivesearch/v3/overview/quickstart/),
+-   A UMD build that works directly in the browser. Installation steps [here](https://docs.appbase.io/docs/reactivesearch/v3/overview/quickstart/#step-5-reactivesearch-as-umd),
+-   Styled and scoped components that can be easily extended,
+-   See the [reactivesearch starter app](https://github.com/appbaseio-apps/reactivesearch-starter-app).
+
+### 🆕 ReactiveSearch API: Secure your ElasticSearch Queries
+
+Based on a popular request, we have implemented support for a declarative API based on ReactiveSearch. The API is called [ReactiveSearch API](https://docs.appbase.io/docs/search/reactivesearch-api/). It moves the query DSL generation logic to a backend system (an appbase.io service) instead of exposing it directly on the client-side. By strictly enabling only ReactiveSearch API use, you can also prevent script injections.
+
+The main advantages of using it over the ElasticSearch Query DSL are:
+- Query generation happens on the server-side - addressing the primary security concern around query injection.
+- Easy recording of analytics events for search and clicks. [Read more](https://docs.appbase.io/docs/reactivesearch/v3/advanced/analytics/)
+- Application of query rules and functions for search queries. [Read more](https://docs.appbase.io/docs/search/rules/)
+
+Using ReactiveSearch API instead of ElasticSearch's query DSL is an opt-in feature. You need to set the `enableAppbase` prop as `true` in your `ReactiveBase` component. This assumes that you are using appbase.io for your backend.
+
+We recommend checking out this [KitchenSink App](https://codesandbox.io/s/eager-sky-cnt66) that demonstrates the use of the `ReactiveSearch API` for all the ReactiveSearch components.
 
 [⬆ Back to Top](#reactive-search)
 
@@ -108,20 +123,20 @@ A set of live demos inspired by real world apps, built with ReactiveSearch.
 
 ### Web
 
-- [demos/airbeds](https://opensource.appbase.io/reactivesearch/demos/airbeds/) - An airbnb-like booking search experience.
-- [demos/technews](https://opensource.appbase.io/reactivesearch/demos/technews/) - A full-text search app on the Hacker News dataset.
-- [demos/gitxplore](https://opensource.appbase.io/reactivesearch/demos/gitxplore/) - Explore all the popular Github repositories.
-- [demos/productsearch](https://opensource.appbase.io/reactivesearch/demos/producthunt/) - Filtered feed of products based on a small Product Hunt dataset.
-- [demos/booksearch](https://opensource.appbase.io/reactivesearch/demos/goodbooks/) - An book search app based on a goodbooks dataset.
-- [demos/ecommerce](https://opensource.appbase.io/reactivesearch/demos/ecommerce/) - An e-commerce car store app.
+-   [demos/airbeds](https://opensource.appbase.io/reactivesearch/demos/airbeds/) - An airbnb-like booking search experience.
+-   [demos/technews](https://opensource.appbase.io/reactivesearch/demos/technews/) - A full-text search app on the Hacker News dataset.
+-   [demos/gitxplore](https://opensource.appbase.io/reactivesearch/demos/gitxplore/) - Explore all the popular Github repositories.
+-   [demos/productsearch](https://opensource.appbase.io/reactivesearch/demos/producthunt/) - Filtered feed of products based on a small Product Hunt dataset.
+-   [demos/booksearch](https://opensource.appbase.io/reactivesearch/demos/goodbooks/) - An book search app based on a goodbooks dataset.
+-   [demos/ecommerce](https://opensource.appbase.io/reactivesearch/demos/ecommerce/) - An e-commerce car store app.
 
 You can check all of them on the [examples section of website](https://opensource.appbase.io/reactivesearch/#examples).
 
 ### Mobile
 
-- [Booksearch on Play Store](https://play.google.com/store/apps/details?id=com.booksnative): A booksearch app showing a searchable collection of over 10k books built with ReactiveSearch. Also available as a snack.
-- [Gitxplore on Play Store](https://play.google.com/store/apps/details?id=com.appbaseio.gitxplore): A Github repository explorer app to  search over the 25k+ most popular github repos.  
-- [ReactiveTodos on App Store](https://itunes.apple.com/us/app/reactivetodos/id1347926945?mt=8): A shared collaborative to-do list app to showcase the capability of Reactivesearch.
+-   [Booksearch on Play Store](https://play.google.com/store/apps/details?id=com.booksnative): A booksearch app showing a searchable collection of over 10k books built with ReactiveSearch. Also available as a snack.
+-   [Gitxplore on Play Store](https://play.google.com/store/apps/details?id=com.appbaseio.gitxplore): A Github repository explorer app to search over the 25k+ most popular github repos.
+-   [ReactiveTodos on App Store](https://itunes.apple.com/us/app/reactivetodos/id1347926945?mt=8): A shared collaborative to-do list app to showcase the capability of Reactivesearch.
 
 [⬆ Back to Top](#reactive-search)
 
@@ -131,14 +146,14 @@ You can check all of them on the [examples section of website](https://opensourc
 
 Here, we share how `ReactiveSearch` compares with other projects that have similar aims.
 
-|  **#** | **ReactiveSearch** | **SearchKit** | **InstantSearch** |
-|  ------: | :------: | :------: | :------: |
-|  **Backend** | Any Elasticsearch index hosted on any Elasticsearch cluster. | Any Elasticsearch index hosted on any Elasticsearch cluster. | Custom-built for Algolia, a proprietary search engine. |
-|  **Development** | Actively developed and maintained. | Active issue responses, some development and maintenance. | Actively developed and maintained. |
-|  **Onboarding Experience** | Starter apps, Live interactive tutorial, getting started guide, component playground, every component has a live working demo with codesandbox. | Getting started tutorial, no live component demos, sparse reference spec for many components. | Starter apps, getting started guide, component playground. |
-|  **Styling Support** | Styled and scoped components. No external CSS import required. Rich theming supported as React props. | CSS based styles with BEM, not scoped to components. Theming supported with SCSS. | CSS based styles, requires external style import. Theming supported by manipulating CSS. |
-|  **Types of Components** | Lists, Ranges, Search, Dates, Maps, Result Displays. Can use your own UI components. | Lists, Ranges, Search*, Result*. Can't use your own UI components. (Only one component for Search and Result, resulting in more code to be written for customizability) | Lists, Range, Search, Result. Can use your own UI components. |
-|  **Supported Distribution Platforms** | React for Web, React Native for mobile. | React for Web. | React, Vue, Angular, vanilla JS for Web, React Native for mobile but latter has no UI components. |
+|                                **#** |                                                               **ReactiveSearch**                                                                |                                                                              **SearchKit**                                                                              |                                         **InstantSearch**                                         |
+| -----------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------: |
+|                          **Backend** |                                          Any Elasticsearch index hosted on any Elasticsearch cluster.                                           |                                                      Any Elasticsearch index hosted on any Elasticsearch cluster.                                                       |                      Custom-built for Algolia, a proprietary search engine.                       |
+|                      **Development** |                                                       Actively developed and maintained.                                                        |                                                        Active issue responses, some development and maintenance.                                                        |                                Actively developed and maintained.                                 |
+|            **Onboarding Experience** | Starter apps, Live interactive tutorial, getting started guide, component playground, every component has a live working demo with codesandbox. |                                      Getting started tutorial, no live component demos, sparse reference spec for many components.                                      |                    Starter apps, getting started guide, component playground.                     |
+|                  **Styling Support** |                      Styled and scoped components. No external CSS import required. Rich theming supported as React props.                      |                                            CSS based styles with BEM, not scoped to components. Theming supported with SCSS.                                            |     CSS based styles, requires external style import. Theming supported by manipulating CSS.      |
+|              **Types of Components** |                              Lists, Ranges, Search, Dates, Maps, Result Displays. Can use your own UI components.                               | Lists, Ranges, Search*, Result*. Can't use your own UI components. (Only one component for Search and Result, resulting in more code to be written for customizability) |                   Lists, Range, Search, Result. Can use your own UI components.                   |
+| **Supported Distribution Platforms** |                                                  React, Vue for Web, React Native for mobile.                                                   |                                                                             React for Web.                                                                              | React, Vue, Angular, vanilla JS for Web, React Native for mobile but latter has no UI components. |
 
 We welcome contributions to this section. If you are building a project or you know of another project that is in the similar space, let us know and we will update the comparisons.
 
@@ -150,37 +165,36 @@ We welcome contributions to this section. If you are building a project or you k
 
 Installing ReactiveSearch is just one command.
 
-* If you're using reactivesearch for web
+-   If you're using reactivesearch for web
 
 ```javascript
 npm install @appbaseio/reactivesearch
 ```
 
-You can check out the quickstart guide with React [here](https://opensource.appbase.io/reactive-manual/getting-started/reactivesearch.html).
+You can check out the quickstart guide with React [here](https://docs.appbase.io/docs/reactivesearch/v3/overview/quickstart/).
 
-* If you're using reactivesearch for mobile (native)
+-   If you're using reactivesearch for mobile (native)
 
 ```javascript
 npm install @appbaseio/reactivesearch-native
 ```
 
-You can check out the quickstart guide with React Native [here](https://opensource.appbase.io/reactive-manual/native/getting-started/reactivesearch.html).
+You can check out the quickstart guide with React Native [here](https://docs.appbase.io/docs/reactivesearch/native/overview/QuickStart/).
 
 <br />
 
-
 ## 7. Docs Manual
 
-The official docs for the Web library are at [opensource.appbase.io/reactive-manual](https://opensource.appbase.io/reactive-manual).
+The official docs for the Web library are at [docs.appbase.io/docs/reactivesearch/v3](https://docs.appbase.io/docs/reactivesearch/v3/overview/quickstart/).
 
 The components are divided into four sections:
-* Generic UI components are at [reactive-manual/base-components](https://opensource.appbase.io/reactive-manual/base-components/textfield.html).
-* List based UI components are at [reactive-manual/list-components](https://opensource.appbase.io/reactive-manual/list-components/singlelist.html).
-* Range based UI components are at [reactive-manual/range-components](https://opensource.appbase.io/reactive-manual/range-components/singlerange.html).
-* Search UI components are at [reactive-manual/search-components](https://opensource.appbase.io/reactive-manual/search-components/datasearch.html).
-* Result components are at [reactive-manual/result-components](https://opensource.appbase.io/reactive-manual/result-components/resultlist.html).
 
-Docs for React Native version of the library are available at [opensource.appbase.io/reactive-manual/native](https://opensource.appbase.io/reactive-manual/native).
+-   List based UI components are at [reactivesearch/v3/list](https://docs.appbase.io/docs/reactivesearch/v3/list/singlelist/).
+-   Range based UI components are at [reactivesearch/v3/range](https://docs.appbase.io/docs/reactivesearch/v3/range/singlerange/).
+-   Search UI components are at [reactivesearch/v3/search](https://docs.appbase.io/docs/reactivesearch/v3/search/datasearch/).
+-   Result components are at [reactivesearch/v3/result](https://docs.appbase.io/docs/reactivesearch/v3/result/reactivelist/).
+
+Docs for React Native version of the library are available at [docs.appbase.io/docs/reactivesearch/native](https://docs.appbase.io/docs/reactivesearch/native/overview/QuickStart/).
 
 [⬆ Back to Top](#reactive-search)
 
@@ -194,14 +208,20 @@ Please check the [contribution guide](.github/CONTRIBUTING.md).
 
 ## 9. Other Projects You Might Like
 
-- [**dejavu**](https://github.com/appbaseio/dejavu) allows viewing raw data within an appbase.io (or Elasticsearch) app. **Soon to be released feature:** An ability to import custom data from CSV and JSON files, along with a guided walkthrough on applying data mappings.
+-   [**arc**](https://github.com/appbaseio/arc) API Gateway for ElasticSearch (Out of the box Security, Rate Limit Features, Record Analytics and Request Logs).
 
-- [**mirage**](https://github.com/appbaseio/mirage) ReactiveSearch components can be extended using custom Elasticsearch queries. For those new to Elasticsearch, Mirage provides an intuitive GUI for composing queries.
+-   **searchbox** A lightweight and performance focused searchbox UI libraries to query and display results from your ElasticSearch app (aka index).
+    -   [**Vanilla**](https://github.com/appbaseio/searchbox) - (~16kB Minified + Gzipped)
+    -   [**React**](https://github.com/appbaseio/react-searchbox) - (~30kB Minified + Gzipped)
+    -   [**Vue**](https://github.com/appbaseio/vue-searchbox) - (~22kB Minified + Gzipped)
 
-- [**ReactiveSearch Dashboard**](https://dashboard.appbase.io/reactivesearch/) All your Reactive Search related apps (created via interactive tutorial, shared by others, etc.) can be accessed from here.
-- [**ReactiveMaps**](https://github.com/appbaseio/reactivemaps) is a similar project to Reactive Search that allows building realtime maps easily.
+-   [**dejavu**](https://github.com/appbaseio/dejavu) allows viewing raw data within an appbase.io (or Elasticsearch) app. **Soon to be released feature:** An ability to import custom data from CSV and JSON files, along with a guided walkthrough on applying data mappings.
 
-- [**appbase-js**](https://github.com/appbaseio/appbase-js) While building search UIs is dandy with Reactive Search, you might also need to add some input forms. **appbase-js** comes in handy there.
+-   [**mirage**](https://github.com/appbaseio/mirage) ReactiveSearch components can be extended using custom Elasticsearch queries. For those new to Elasticsearch, Mirage provides an intuitive GUI for composing queries.
+
+-   [**ReactiveMaps**](https://github.com/appbaseio/reactivesearch/tree/next/packages/maps) is a similar project to Reactive Search that allows building realtime maps easily.
+
+-   [**appbase-js**](https://github.com/appbaseio/appbase-js) While building search UIs is dandy with Reactive Search, you might also need to add some input forms. **appbase-js** comes in handy there.
 
 [⬆ Back to Top](#reactive-search)
 

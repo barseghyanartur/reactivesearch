@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { ReactiveBase } from '@appbaseio/reactivesearch';
-import { ReactiveMap } from '@appbaseio/reactivemaps';
+import { ReactiveGoogleMap } from '@appbaseio/reactivemaps';
 
 import './index.css';
 
@@ -25,7 +25,7 @@ class Main extends React.Component {
 	renderInfo() {
 		const { title } = this.state;
 		if (title) {
-			return (<div className="title-box">{title}</div>);
+			return <div className="title-box">{title}</div>;
 		}
 		return null;
 	}
@@ -33,14 +33,15 @@ class Main extends React.Component {
 	render() {
 		return (
 			<ReactiveBase
-				app="reactivemap_demo"
-				credentials="y4pVxY2Ok:c92481e2-c07f-4473-8326-082919282c18"
+				app="meetup_dataset"
+				url="https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io"
+				enableAppbase
 				type="meetupdata1"
-				mapKey="AIzaSyBQdVcKCe0q_vOBDUvJYpzwGpt_d_uTj4Q"
+				mapKey="AIzaSyAKz3UhgSuP872fb-Aw27oPRI7M0eXkA9U"
 			>
 				<h2>Polylines on ReactiveMap</h2>
 				{this.renderInfo()}
-				<ReactiveMap
+				<ReactiveGoogleMap
 					componentId="map"
 					dataField="location"
 					title="Reactive Maps"
@@ -50,7 +51,7 @@ class Main extends React.Component {
 					size={50}
 					defaultZoom={3}
 					center={{ lat: 0, lng: -180 }}
-					onAllData={(hits, streamHits, loadMore, renderMap) => {
+					renderAllData={(hits, streamHits, loadMore, renderMap) => {
 						if (this.mapRef) {
 							const { map } = this.mapRef;
 							const flightPath = new window.google.maps.Polyline({

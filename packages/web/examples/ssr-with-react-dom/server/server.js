@@ -11,7 +11,8 @@ import BookCard from '../common/BookCard';
 // settings for the ReactiveBase component
 const settings = {
 	app: 'good-books-ds',
-	credentials: 'nY6NNTZZ6:27b76b9f-18ea-456c-bc5e-3a5263ebc63d',
+	url: 'https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io',
+	enableAppbase: true,
 };
 
 // props for ReactiveSearch components
@@ -36,15 +37,15 @@ const singleRangeProps = {
 			label: 'Rating > 4',
 		},
 	],
-	defaultSelected: 'Rating 3 to 4',
+	URLParams: true,
 };
 
 const reactiveListProps = {
 	componentId: 'SearchResult',
-	dataField: 'original_title.raw',
+	dataField: 'original_title',
 	from: 0,
 	size: 10,
-	onData: data => <BookCard key={data._id} data={data} />,
+	renderItem: data => <BookCard key={data._id} data={data} />,
 	react: {
 		and: ['BookSensor'],
 	},
@@ -57,7 +58,7 @@ const port = 3000;
 // Since we're passing all requests to same handleRenderer
 // We need to serve the bundle.js as it is
 // Alternatively you can define your own set of routes
-app.use('/static', Express.static('dist'));
+app.use('/dist', Express.static('dist'));
 
 function renderFullPage(html, preloadedState) {
 	return `
@@ -71,7 +72,7 @@ function renderFullPage(html, preloadedState) {
 			<script>
 				window.__PRELOADED_STATE__ = ${JSON.stringify(preloadedState)}
 			</script>
-			<script src="/static/bundle.js"></script>
+			<script src="dist/bundle.js"></script>
 		</body>
 		</html>
     `;
@@ -92,7 +93,9 @@ async function handleRender(req, res) {
 				source: ReactiveList,
 			},
 		],
-		null,
+		{
+			BookSensor: 'Rating 3 to 4',
+		},
 		settings,
 	);
 	// Render the component to a string
@@ -100,12 +103,16 @@ async function handleRender(req, res) {
 	// ReactiveSearch uses emotion and this will inline the styles
 	// so you can get the correct styles for ReactiveSearch's components
 	// on the first load
-	const html = renderStylesToString(renderToString(<App
-		store={store}
-		settings={settings}
-		singleRangeProps={singleRangeProps}
-		reactiveListProps={reactiveListProps}
-	/>));
+	const html = renderStylesToString(
+		renderToString(
+			<App
+				store={store}
+				settings={settings}
+				singleRangeProps={singleRangeProps}
+				reactiveListProps={reactiveListProps}
+			/>,
+		),
+	);
 
 	// Send the rendered page back to the client
 	res.send(renderFullPage(html, store));
@@ -119,6 +126,7 @@ app.listen(port, (error) => {
 	} else {
 		// eslint-disable-next-line
 		console.info(
-			`==> 🌎  Listening on port ${port}. Open up http://localhost:${port}/ in your browser.`);
+			`==> 🌎  Listening on port ${port}. Open up http://localhost:${port}/ in your browser.`,
+		);
 	}
 });

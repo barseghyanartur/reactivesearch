@@ -1,4 +1,5 @@
-import styled, { css } from 'react-emotion';
+import styled from '@emotion/styled';
+import { css } from '@emotion/core';
 
 const left = css`
 	padding-left: 12px;
@@ -11,14 +12,14 @@ const right = css`
 `;
 
 const clear = css`
-	padding-right: 32px;
+	padding-right: 29px;
 	right: 0;
-	top: calc(50% - 9px);
 `;
 
 const InputIcon = styled.div`
 	position: absolute;
-	top: calc(50% - 8px);
+	top: ${({ isClearIcon }) => (isClearIcon ? '12px' : '13px')};
+	cursor: pointer;
 	${({ iconPosition }) => {
 		if (iconPosition === 'left') {
 			return left;
@@ -27,7 +28,8 @@ const InputIcon = styled.div`
 		}
 		return null;
 	}};
-	${({ clearIcon }) => clearIcon && clear}};
+	${({ clearIcon }) => clearIcon && clear};
+	${({ showIcon }) => !showIcon && 'padding-right:10px'};
 
 	svg.search-icon {
 		fill: ${({ theme }) => theme.colors.primaryColor};

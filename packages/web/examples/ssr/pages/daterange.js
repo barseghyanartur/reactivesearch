@@ -1,5 +1,11 @@
 import React, { Component } from 'react';
-import { ReactiveBase, DateRange, SelectedFilters, ResultCard } from '@appbaseio/reactivesearch';
+import {
+	ReactiveBase,
+	DateRange,
+	SelectedFilters,
+	ResultCard,
+	ReactiveList,
+} from '@appbaseio/reactivesearch';
 import PropTypes from 'prop-types';
 
 import initReactivesearch from '@appbaseio/reactivesearch/lib/server';
@@ -31,8 +37,9 @@ const dateQuery = (value) => {
 };
 
 const settings = {
-	app: 'housing',
-	credentials: '0aL1X5Vts:1ee67be1-9195-4f4b-bd4f-a91cd1b5e4b5',
+	app: 'airbeds-test-app',
+	url: 'https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io',
+	enableAppbase: true,
 	type: 'listing',
 };
 
@@ -41,7 +48,7 @@ const dateRangeProps = {
 	dataField: 'date_from',
 	initialMonth: new Date('2017-05-05'),
 	customQuery: dateQuery,
-	defaultSelected: {
+	defaultValue: {
 		start: '2017-05-05',
 		end: '2017-05-10',
 	},
@@ -53,20 +60,25 @@ const resultCardProps = {
 	className: 'result-list-container',
 	from: 0,
 	size: 40,
-	onData: res => ({
-		image: res.image,
-		title: res.name,
-		description: (
-			<div>
-				<div>${res.price}</div>
-				<span style={{ backgroundImage: `url(${res.host_image})` }} />
-				<p>
-					{res.room_type} · {res.accommodates} guests
-				</p>
-			</div>
-		),
-		url: res.listing_url,
-	}),
+	render: ({ data }) => (
+		<ReactiveList.ResultCardsWrapper>
+			{data.map(item => (
+				<ResultCard href={item.listing_url} key={item._id}>
+					<ResultCard.Image src={item.image} />
+					<ResultCard.Title>{item.name}</ResultCard.Title>
+					<ResultCard.Description>
+						<div>
+							<div>${item.price}</div>
+							<span style={{ backgroundImage: `url(${item.host_image})` }} />
+							<p>
+								{item.room_type} · {item.accommodates} guests
+							</p>
+						</div>
+					</ResultCard.Description>
+				</ResultCard>
+			))}
+		</ReactiveList.ResultCardsWrapper>
+	),
 	react: {
 		and: ['DateSensor'],
 	},
@@ -80,13 +92,11 @@ export default class Main extends Component {
 				[
 					{
 						...dateRangeProps,
-						type: 'DateRange',
 						source: DateRange,
 					},
 					{
 						...resultCardProps,
-						type: 'ResultCard',
-						source: ResultCard,
+						source: ReactiveList,
 					},
 				],
 				null,
@@ -106,7 +116,7 @@ export default class Main extends Component {
 
 						<div className="col">
 							<SelectedFilters />
-							<ResultCard {...resultCardProps} />
+							<ReactiveList {...resultCardProps} />
 						</div>
 					</div>
 				</ReactiveBase>

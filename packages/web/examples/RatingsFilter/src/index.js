@@ -1,65 +1,102 @@
-import React, { Component } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom';
 import {
 	ReactiveBase,
 	RatingsFilter,
 	ResultCard,
 	SelectedFilters,
+	ReactiveList,
 } from '@appbaseio/reactivesearch';
 
 import './index.css';
 
-class Main extends Component {
-	render() {
-		return (
-			<ReactiveBase
-				app="car-store"
-				credentials="cf7QByt5e:d2d60548-82a9-43cc-8b40-93cbbe75c34c"
-			>
-				<div className="row">
-					<div className="col">
-						<SelectedFilters />
-						<RatingsFilter
-							componentId="RatingsSensor"
-							dataField="rating"
-							title="RatingsFilter"
-							data={[
-								{ start: 4, end: 5, label: '4 stars and up' },
-								{ start: 3, end: 5, label: '3 stars and up' },
-								{ start: 2, end: 5, label: '2 stars and up' },
-								{ start: 1, end: 5, label: '> 1 stars' },
-							]}
-						/>
-					</div>
+const Main = () => (
+	<ReactiveBase
+		app="good-books-ds"
+		url="https://a03a1cb71321:75b6603d-9456-4a5a-af6b-a487b309eb61@arc-cluster-appbase-demo-6pjy6z.searchbase.io"
+		enableAppbase
+	>
+		<div className="row">
+			<div className="col">
+				<SelectedFilters />
+				<RatingsFilter
+					componentId="RatingsSensor"
+					dataField="average_rating_rounded"
+					title="RatingsFilter"
+					data={[
+						{ start: 4, end: 5, label: '4 stars and up' },
+						{ start: 3, end: 5, label: '3 stars and up' },
+						{ start: 2, end: 5, label: '2 stars and up' },
+						{ start: 1, end: 5, label: '> 1 stars' },
+					]}
+				/>
+			</div>
 
-					<div className="col">
-						<ResultCard
-							componentId="SearchResult"
-							dataField="name"
-							title="Results"
-							from={0}
-							size={20}
-							onData={this.onData}
-							react={{
-								and: 'RatingsSensor',
-							}}
-						/>
-					</div>
-				</div>
-			</ReactiveBase>
-		);
-	}
+			<div className="col">
+				<ReactiveList
+					componentId="SearchResult"
+					dataField="name"
+					title="Results"
+					from={0}
+					size={20}
+					react={{
+						and: 'RatingsSensor',
+					}}
+					render={({ data }) => (
+						<ReactiveList.ResultCardsWrapper>
+							{data.map(item => (
+								<ResultCard key={item.id}>
+									<ResultCard.Image src={item.image} />
+									<ResultCard.Title>
+										<div
+											className="book-title"
+											dangerouslySetInnerHTML={{
+												__html: item.original_title,
+											}}
+										/>
+									</ResultCard.Title>
 
-	onData(res) {
-		const result = {
-			image:
-				'https://www.enterprise.com/content/dam/global-vehicle-images/cars/FORD_FOCU_2012-1.png',
-			title: res.name,
-			rating: res.rating,
-			description: res.brand,
-		};
-		return result;
-	}
-}
+									<ResultCard.Description>
+										<div className="flex column justify-space-between">
+											<div>
+												<div>
+													by{' '}
+													<span className="authors-list">
+														{item.authors}
+													</span>
+												</div>
+												<div className="ratings-list flex align-center">
+													<span className="stars">
+														{Array(item.average_rating_rounded)
+															.fill('x')
+															.map((
+																item, // eslint-disable-line
+																index,
+															) => (
+																<i
+																	className="fas fa-star"
+																	key={index} // eslint-disable-line
+																/>
+															))}
+													</span>
+													<span className="avg-rating">
+														({item.average_rating} avg)
+													</span>
+												</div>
+											</div>
+											<span className="pub-year">
+												Pub {item.original_publication_year}
+											</span>
+										</div>
+									</ResultCard.Description>
+								</ResultCard>
+							))}
+						</ReactiveList.ResultCardsWrapper>
+					)}
+				/>
+			</div>
+		</div>
+	</ReactiveBase>
+);
 
 ReactDOM.render(<Main />, document.getElementById('root'));

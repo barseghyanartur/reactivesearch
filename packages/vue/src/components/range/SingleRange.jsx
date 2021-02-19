@@ -1,28 +1,23 @@
 import { Actions, helper } from '@appbaseio/reactivecore';
+import { componentTypes } from '@appbaseio/reactivecore/lib/utils/constants';
 import VueTypes from 'vue-types';
+import ComponentWrapper from '../basic/ComponentWrapper.jsx';
 import Title from '../../styles/Title';
 import Container from '../../styles/Container';
 import { UL, Radio } from '../../styles/FormControlList';
-import { connect } from '../../utils/index';
+import { connect, updateCustomQuery, isQueryIdentical } from '../../utils/index';
 import types from '../../utils/vueTypes';
 
-const {
-	addComponent,
-	removeComponent,
-	watchComponent,
-	updateQuery,
-	setQueryListener
-} = Actions;
-const { isEqual, checkValueChange, getClassName } = helper;
+const { updateQuery, setQueryOptions, setCustomQuery } = Actions;
+const { isEqual, checkValueChange, getClassName, getOptionsFromQuery } = helper;
 
 const SingleRange = {
 	name: 'SingleRange',
 	data() {
 		this.__state = {
-			currentValue: null
+			currentValue: null,
 		};
 		this.type = 'range';
-		this.locked = false;
 		return this.__state;
 	},
 	props: {
@@ -32,50 +27,52 @@ const SingleRange = {
 		customQuery: types.func,
 		data: types.data,
 		dataField: types.stringRequired,
-		defaultSelected: types.string,
+		defaultValue: types.string,
+		value: types.value,
 		filterLabel: types.string,
 		innerClass: types.style,
 		react: types.react,
 		showFilter: VueTypes.bool.def(true),
 		showRadio: VueTypes.bool.def(true),
 		title: types.title,
-		URLParams: VueTypes.bool.def(false)
+		URLParams: VueTypes.bool.def(false),
+		nestedField: types.string,
 	},
 	created() {
-		const onQueryChange = (...args) => {
-			this.$emit('queryChange', ...args);
-		};
-		this.setQueryListener(this.$props.componentId, onQueryChange, null);
+		// Set custom query in store
+		updateCustomQuery(this.componentId, this.setCustomQuery, this.$props, this.currentValue);
 	},
 	beforeMount() {
-		this.addComponent(this.$props.componentId);
-		this.setReact(this.$props);
-
 		if (this.selectedValue) {
 			this.setValue(this.selectedValue);
-		} else if (this.$props.defaultSelected) {
-			this.setValue(this.$props.defaultSelected);
+		} else if (this.$props.value) {
+			this.setValue(this.$props.value);
+		} else if (this.$props.defaultValue) {
+			this.setValue(this.$props.defaultValue);
 		}
 	},
-
-	beforeDestroy() {
-		this.removeComponent(this.$props.componentId);
-	},
 	watch: {
-		react() {
-			this.setReact(this.$props);
-		},
 		dataField() {
 			this.updateQueryHandler(this.$data.currentValue, this.$props);
 		},
-		defaultSelected(newVal) {
+		defaultValue(newVal) {
 			this.setValue(newVal);
+		},
+		value(newVal, oldVal) {
+			if (!isEqual(newVal, oldVal)) {
+				this.setValue(newVal);
+			}
 		},
 		selectedValue(newVal) {
 			if (!isEqual(this.$data.currentValue, newVal)) {
 				this.setValue(newVal);
 			}
-		}
+		},
+		customQuery(newVal, oldVal) {
+			if (!isQueryIdentical(newVal, oldVal, this.$data.currentValue, this.$props)) {
+				this.updateQueryHandler(this.$data.currentValue, this.$props);
+			}
+		},
 	},
 
 	render() {
@@ -98,7 +95,7 @@ const SingleRange = {
 									id={`${this.$props.componentId}-${item.label}`}
 									name={this.$props.componentId}
 									value={item.label}
-									onClick={this.handleClick}
+									onChange={this.handleChange}
 									type="radio"
 									checked={selected}
 									show={this.$props.showRadio}
@@ -118,94 +115,113 @@ const SingleRange = {
 	},
 
 	methods: {
-		setReact(props) {
-			if (props.react) {
-				props.watchComponent(props.componentId, props.react);
-			}
-		},
-
 		setValue(value, props = this.$props) {
-			// ignore state updates when component is locked
-			if (props.beforeValueChange && this.locked) {
-				return;
-			}
-
-			this.locked = true;
 			const currentValue = SingleRange.parseValue(value, props);
 
 			const performUpdate = () => {
 				this.currentValue = currentValue;
 				this.updateQueryHandler(currentValue, props);
-				this.locked = false;
 				this.$emit('valueChange', currentValue);
+				this.$emit('value-change', currentValue);
 			};
 
 			checkValueChange(
 				props.componentId,
 				currentValue,
 				props.beforeValueChange,
-				performUpdate
+				performUpdate,
 			);
 		},
 
 		updateQueryHandler(value, props) {
-			const query = props.customQuery || SingleRange.defaultQuery;
+			const { customQuery } = props;
+			let query = SingleRange.defaultQuery(value, props);
+			let customQueryOptions;
+			if (customQuery) {
+				({ query } = customQuery(value, props) || {});
+				customQueryOptions = getOptionsFromQuery(customQuery(value, props));
+				updateCustomQuery(
+					this.componentId,
+					this.setCustomQuery,
+					this.$props,
+					this.currentValue,
+				);
+			}
+			this.setQueryOptions(props.componentId, customQueryOptions);
+
 			this.updateQuery({
 				componentId: props.componentId,
-				query: query(value, props),
+				query,
 				value,
 				label: props.filterLabel,
 				showFilter: props.showFilter,
 				URLParams: props.URLParams,
-				componentType: 'SINGLERANGE'
+				componentType: componentTypes.singleRange,
 			});
 		},
 
-		handleClick(e) {
-			this.setValue(e.target.value);
-		}
-	}
+		handleChange(e) {
+			const { value } = this.$props;
+
+			if (value === undefined) {
+				this.setValue(e.target.value);
+			} else {
+				this.$emit('change', e.target.value);
+			}
+		},
+	},
 };
 
-SingleRange.parseValue = (value, props) =>
-	props.data.find(item => item.label === value) || null;
+SingleRange.parseValue = (value, props) => props.data.find(item => item.label === value) || null;
 
 SingleRange.defaultQuery = (value, props) => {
+	let query = null;
 	if (value) {
-		return {
+		query = {
 			range: {
 				[props.dataField]: {
 					gte: value.start,
 					lte: value.end,
-					boost: 2.0
-				}
-			}
+					boost: 2.0,
+				},
+			},
 		};
 	}
-	return null;
+	if (query && props.nestedField) {
+		return {
+			query: {
+				nested: {
+					path: props.nestedField,
+					query,
+				},
+			},
+		};
+	}
+	return query;
 };
 
 const mapStateToProps = (state, props) => ({
 	selectedValue:
 		(state.selectedValues[props.componentId]
 			&& state.selectedValues[props.componentId].value)
-		|| null
+		|| null,
+	componentProps: state.props[props.componentId],
 });
 
 const mapDispatchtoProps = {
-	addComponent,
-	removeComponent,
 	updateQuery,
-	watchComponent,
-	setQueryListener
+	setQueryOptions,
+	setCustomQuery,
 };
 
-const RangeConnected = connect(
-	mapStateToProps,
-	mapDispatchtoProps
-)(SingleRange);
+const RangeConnected = ComponentWrapper(connect(mapStateToProps, mapDispatchtoProps)(SingleRange), {
+	componentType: componentTypes.singleRange,
+});
 
 SingleRange.install = function(Vue) {
 	Vue.component(SingleRange.name, RangeConnected);
 };
+// Add componentType for SSR
+SingleRange.componentType = componentTypes.singleRange;
+
 export default SingleRange;

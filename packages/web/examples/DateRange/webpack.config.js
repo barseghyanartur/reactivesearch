@@ -1,6 +1,8 @@
 const path = require('path');
 
 module.exports = {
+	mode: 'development',
+	devServer: { 		compress: true, 		disableHostCheck: true 	},
 	context: path.resolve(__dirname, 'src'),
 	entry: {
 		main: './index.js',
